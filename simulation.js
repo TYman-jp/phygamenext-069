@@ -19,12 +19,23 @@ class RefractionSimulation {
       n1: 1.00,
       n2: 1.50,
     };
+    this.target = null;
 
     // 境界面のY座標
     this.boundaryY = this.H / 2;
     // 光線の起点 X
     this.originX = this.W / 2;
 
+    this.draw(this.params);
+  }
+
+  setTarget(target) {
+    this.target = target ? { ...target } : null;
+    this.draw(this.params);
+  }
+
+  clearTarget() {
+    this.target = null;
     this.draw(this.params);
   }
 
@@ -81,6 +92,10 @@ class RefractionSimulation {
     ctx.fillText(`媒質 1  (n₁ = ${n1.toFixed(2)})`, 18, 28);
     ctx.fillText(`媒質 2  (n₂ = ${n2.toFixed(2)})`, 18, boundaryY + 28);
 
+    if (this.target) {
+      this._drawTarget(this.target);
+    }
+
     // ── 境界面 ──
     ctx.save();
     ctx.setLineDash([6, 4]);
@@ -116,7 +131,7 @@ class RefractionSimulation {
     const isTIR = theta2Deg === null;
 
     // ── 入射光線の長さと到達点 ──
-    const rayLen = 160;
+    const rayLen = 190;
     // 入射光は左上から境界面の originX に向かう（法線から theta1 傾ける）
     const incidentStartX = originX - Math.sin(theta1Rad) * rayLen;
     const incidentStartY = boundaryY - Math.cos(theta1Rad) * rayLen;
@@ -263,6 +278,42 @@ class RefractionSimulation {
     ctx.arc(cx, cy, r, startAngle, endAngle);
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  _drawTarget(target) {
+    const { ctx } = this;
+    const r = target.radius || 14;
+
+    ctx.save();
+    ctx.translate(target.x, target.y);
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = '#FFB800';
+
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 7, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,184,0,0.08)';
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#FFB800';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-r - 5, 0);
+    ctx.lineTo(r + 5, 0);
+    ctx.moveTo(0, -r - 5);
+    ctx.lineTo(0, r + 5);
+    ctx.stroke();
+
+    ctx.fillStyle = '#FFB800';
+    ctx.font = '600 11px "JetBrains Mono"';
+    ctx.fillText('TARGET', r + 9, 4);
     ctx.restore();
   }
 

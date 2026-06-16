@@ -7,6 +7,7 @@
   // ── 初期化 ──
   const sim = new RefractionSimulation('simCanvas');
   const logger = new SimulationLogger();
+  const quiz = new RefractionQuiz(sim);
 
   // UI要素
   const angleSlider = document.getElementById('angleSlider');
@@ -24,6 +25,13 @@
   const logCount    = document.getElementById('logCount');
   const clearLogBtn = document.getElementById('clearLog');
   const exportLogBtn = document.getElementById('exportLog');
+  const newQuizBtn = document.getElementById('newQuizBtn');
+  const checkQuizBtn = document.getElementById('checkQuizBtn');
+  const revealQuizBtn = document.getElementById('revealQuizBtn');
+  const quizState = document.getElementById('quizState');
+  const quizMaterial = document.getElementById('quizMaterial');
+  const quizTarget = document.getElementById('quizTarget');
+  const quizFeedback = document.getElementById('quizFeedback');
 
   // ── スライダーイベント ──
   angleSlider.addEventListener('input', () => {
@@ -94,13 +102,7 @@
       n1Slider.value = n1;
       n2Slider.value = n2;
       angleSlider.value = angle;
-      n1Val.textContent = n1.toFixed(2);
-      n2Val.textContent = n2.toFixed(2);
-      angleVal.textContent = `${angle.toFixed(1)}°`;
-      incidentDisplay.textContent = angle.toFixed(1);
-
-      updateFormulaPreview();
-      previewDraw();
+      syncParamLabels();
     });
   });
 
@@ -183,6 +185,47 @@
     a.click();
     URL.revokeObjectURL(url);
   });
+
+  // ── クイズ機能 ──
+  newQuizBtn.addEventListener('click', () => {
+    const problem = quiz.generate();
+    quizState.textContent = '出題中';
+    quizState.className = 'quiz-state mono is-active';
+    quizMaterial.textContent = problem.materialLabel;
+    quizTarget.textContent = `x=${problem.target.x.toFixed(0)}, y=${problem.target.y.toFixed(0)}`;
+    quizFeedback.textContent = '的が表示されました。n₁、n₂、入射角を調整してから回答判定してください。';
+    quizFeedback.className = 'quiz-feedback';
+    previewDraw();
+  });
+
+  checkQuizBtn.addEventListener('click', () => {
+    const params = getParams();
+    const result = quiz.evaluate(params);
+    sim.run(params);
+    quizFeedback.textContent = result.message;
+    quizFeedback.className = `quiz-feedback ${result.status === 'correct' ? 'is-correct' : 'is-miss'}`;
+    quizState.textContent = result.status === 'correct' ? '正解' : '判定済み';
+    quizState.className = `quiz-state mono ${result.status === 'correct' ? 'is-correct' : 'is-miss'}`;
+  });
+
+  revealQuizBtn.addEventListener('click', () => {
+    quizFeedback.textContent = quiz.revealAnswer();
+    quizFeedback.className = 'quiz-feedback is-answer';
+    quizState.textContent = '答え表示';
+    quizState.className = 'quiz-state mono is-answer';
+  });
+
+  function syncParamLabels() {
+    const angle = parseFloat(angleSlider.value);
+    const n1 = parseFloat(n1Slider.value);
+    const n2 = parseFloat(n2Slider.value);
+    n1Val.textContent = n1.toFixed(2);
+    n2Val.textContent = n2.toFixed(2);
+    angleVal.textContent = `${angle.toFixed(1)}°`;
+    incidentDisplay.textContent = angle.toFixed(1);
+    updateFormulaPreview();
+    previewDraw();
+  }
 
   // ── 起動 ──
   updateFormulaPreview();

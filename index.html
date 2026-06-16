@@ -89,6 +89,43 @@
         </div>
       </section>
 
+      <!-- クイズパネル -->
+      <section class="quiz-panel">
+        <div class="quiz-header">
+          <div>
+            <div class="section-label">REFRACTION QUIZ</div>
+            <h2>的に光を当てる</h2>
+          </div>
+          <span class="quiz-state mono" id="quizState">未出題</span>
+        </div>
+
+        <div class="quiz-card">
+          <p id="quizPrompt">問題を生成すると、屈折した先に的が表示されます。n₁、n₂、入射角を調整して的に光を当ててください。</p>
+          <dl class="quiz-data">
+            <div>
+              <dt>媒質</dt>
+              <dd id="quizMaterial">—</dd>
+            </div>
+            <div>
+              <dt>的の中心</dt>
+              <dd id="quizTarget">—</dd>
+            </div>
+            <div>
+              <dt>許容誤差</dt>
+              <dd>入射角 ±1.0° / 屈折率 ±0.03</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="quiz-actions">
+          <button id="newQuizBtn" class="quiz-btn quiz-btn--primary">問題生成</button>
+          <button id="checkQuizBtn" class="quiz-btn">回答判定</button>
+          <button id="revealQuizBtn" class="quiz-btn">答え表示</button>
+        </div>
+
+        <div class="quiz-feedback" id="quizFeedback">Canvas の黄色い的を狙ってください。</div>
+      </section>
+
       <!-- ログパネル -->
       <section class="log-panel">
         <div class="log-header">
@@ -125,6 +162,7 @@
 
   <script src="simulation.js"></script>
   <script src="logger.js"></script>
+  <script src="quiz.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
