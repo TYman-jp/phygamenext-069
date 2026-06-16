@@ -1,0 +1,15 @@
+{
+  "name": "phygame-next",
+  "version": "1.0.0",
+  "description": "物理シミュレーション Webシステム — 光の屈折",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js 3000"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "keywords": ["physics", "simulation", "optics", "refraction"],
+  "license": "MIT"
+}

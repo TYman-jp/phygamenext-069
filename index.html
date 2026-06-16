@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhyGame Next — 光の屈折シミュレーター</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="lab-grid"></div>
+
+  <header>
+    <div class="logo">
+      <span class="logo-icon">⬡</span>
+      <span class="logo-text">PhyGame<span class="logo-accent">Next</span></span>
+    </div>
+    <div class="header-badge">光学シミュレーター v1.0</div>
+  </header>
+
+  <main>
+    <!-- ビジュアライザー -->
+    <section class="visualizer-section">
+      <div class="section-label">SIMULATION CANVAS</div>
+      <div class="canvas-wrapper">
+        <canvas id="simCanvas" width="700" height="420"></canvas>
+        <div class="canvas-overlay">
+          <div class="angle-badge incident-badge" id="incidentBadge">入射角 <span id="incidentDisplay">45.0</span>°</div>
+          <div class="angle-badge refracted-badge" id="refractedBadge">屈折角 <span id="refractedDisplay">—</span>°</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="control-log-grid">
+      <!-- コントロールパネル -->
+      <section class="control-panel">
+        <div class="section-label">PARAMETERS</div>
+
+        <div class="param-block">
+          <label class="param-label">
+            入射角
+            <span class="param-value mono" id="angleVal">45.0°</span>
+          </label>
+          <input type="range" id="angleSlider" min="0" max="89" step="0.5" value="45" class="slider">
+          <div class="range-hints"><span>0°</span><span>89°</span></div>
+        </div>
+
+        <div class="param-block">
+          <label class="param-label">
+            媒質1 屈折率 <em class="param-sub">n₁</em>
+            <span class="param-value mono" id="n1Val">1.00</span>
+          </label>
+          <input type="range" id="n1Slider" min="1.00" max="3.00" step="0.01" value="1.00" class="slider slider--orange">
+          <div class="range-hints"><span>1.00（空気）</span><span>3.00</span></div>
+        </div>
+
+        <div class="param-block">
+          <label class="param-label">
+            媒質2 屈折率 <em class="param-sub">n₂</em>
+            <span class="param-value mono" id="n2Val">1.50</span>
+          </label>
+          <input type="range" id="n2Slider" min="1.00" max="3.00" step="0.01" value="1.50" class="slider slider--orange">
+          <div class="range-hints"><span>1.00</span><span>3.00（ダイヤ≈2.42）</span></div>
+        </div>
+
+        <div class="preset-row">
+          <span class="param-label" style="margin-bottom:8px;display:block;">プリセット</span>
+          <div class="preset-buttons">
+            <button class="preset-btn" data-n1="1.00" data-n2="1.33" data-angle="45">空気→水</button>
+            <button class="preset-btn" data-n1="1.00" data-n2="1.50" data-angle="45">空気→ガラス</button>
+            <button class="preset-btn" data-n1="1.00" data-n2="2.42" data-angle="30">空気→ダイヤ</button>
+            <button class="preset-btn" data-n1="1.33" data-n2="1.00" data-angle="40">水→空気</button>
+          </div>
+        </div>
+
+        <div class="formula-box">
+          <div class="formula-title">スネルの法則</div>
+          <div class="formula mono">n₁ · sin(θ₁) = n₂ · sin(θ₂)</div>
+          <div class="formula-result" id="formulaResult">—</div>
+        </div>
+
+        <button id="runBtn" class="run-button">
+          <span class="run-icon">▶</span> シミュレーション実行
+        </button>
+
+        <div class="tir-warning hidden" id="tirWarning">
+          ⚠ 全反射が発生しています（臨界角超過）
+        </div>
+      </section>
+
+      <!-- ログパネル -->
+      <section class="log-panel">
+        <div class="log-header">
+          <div class="section-label">SIMULATION LOG</div>
+          <div class="log-controls">
+            <span class="log-count mono" id="logCount">0 件</span>
+            <button id="clearLog" class="clear-btn">クリア</button>
+            <button id="exportLog" class="export-btn">CSV</button>
+          </div>
+        </div>
+        <div class="log-table-wrap">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>実行日時</th>
+                <th>n₁</th>
+                <th>n₂</th>
+                <th>入射角</th>
+                <th>屈折角</th>
+                <th>結果</th>
+              </tr>
+            </thead>
+            <tbody id="logBody">
+              <tr class="log-empty">
+                <td colspan="7">まだログがありません。シミュレーションを実行してください。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="simulation.js"></script>
+  <script src="logger.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
