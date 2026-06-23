@@ -189,11 +189,14 @@
   // ── クイズ機能 ──
   newQuizBtn.addEventListener('click', () => {
     const problem = quiz.generate();
+    applyQuizFixedParams(problem.fixed);
     quizState.textContent = '出題中';
     quizState.className = 'quiz-state mono is-active';
     quizMaterial.textContent = problem.materialLabel;
     quizTarget.textContent = `x=${problem.target.x.toFixed(0)}, y=${problem.target.y.toFixed(0)}`;
-    quizFeedback.textContent = '的が表示されました。n₁、n₂、入射角を調整してから回答判定してください。';
+    quizFeedback.textContent = problem.fixed && Object.keys(problem.fixed).length
+      ? '固定値を保ったまま、残りの値を調整して的に光を当ててください。'
+      : '的が表示されました。n₁、n₂、入射角を調整してから回答判定してください。';
     quizFeedback.className = 'quiz-feedback';
     previewDraw();
   });
@@ -214,6 +217,14 @@
     quizState.textContent = '答え表示';
     quizState.className = 'quiz-state mono is-answer';
   });
+
+  function applyQuizFixedParams(fixed) {
+    if (!fixed) return;
+    if (typeof fixed.theta1 === 'number') angleSlider.value = fixed.theta1;
+    if (typeof fixed.n1 === 'number') n1Slider.value = fixed.n1;
+    if (typeof fixed.n2 === 'number') n2Slider.value = fixed.n2;
+    syncParamLabels();
+  }
 
   function syncParamLabels() {
     const angle = parseFloat(angleSlider.value);
