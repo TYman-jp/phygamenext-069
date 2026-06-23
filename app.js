@@ -1,30 +1,37 @@
 /**
  * app.js
- * アプリケーションコントローラー
+ * アプリケーションコントローラー (光の屈折 / 水面波 両対応)
  */
 
 (function () {
   // ── 初期化 ──
   const sim = new RefractionSimulation('simCanvas');
+  const waveSim = new WaveSimulation('simCanvas');
   const logger = new SimulationLogger();
   const quiz = new RefractionQuiz(sim);
 
-  // UI要素
+  let currentMode = 'refraction'; // 'refraction' または 'wave'
+
+  // UI要素 (共通)
+  const runBtn      = document.getElementById('runBtn');
+  const logBody     = document.getElementById('logBody');
+  const logCount    = document.getElementById('logCount');
+  const clearLogBtn = document.getElementById('clearLog');
+  const exportLogBtn = document.getElementById('exportLog');
+
+  // UI要素 (屈折)
   const angleSlider = document.getElementById('angleSlider');
   const n1Slider    = document.getElementById('n1Slider');
   const n2Slider    = document.getElementById('n2Slider');
   const angleVal    = document.getElementById('angleVal');
   const n1Val       = document.getElementById('n1Val');
   const n2Val       = document.getElementById('n2Val');
-  const runBtn      = document.getElementById('runBtn');
   const tirWarning  = document.getElementById('tirWarning');
   const formulaResult = document.getElementById('formulaResult');
   const incidentDisplay  = document.getElementById('incidentDisplay');
   const refractedDisplay = document.getElementById('refractedDisplay');
-  const logBody     = document.getElementById('logBody');
-  const logCount    = document.getElementById('logCount');
-  const clearLogBtn = document.getElementById('clearLog');
-  const exportLogBtn = document.getElementById('exportLog');
+
+  // UI要素 (クイズ)
   const newQuizBtn = document.getElementById('newQuizBtn');
   const checkQuizBtn = document.getElementById('checkQuizBtn');
   const revealQuizBtn = document.getElementById('revealQuizBtn');
@@ -33,7 +40,58 @@
   const quizTarget = document.getElementById('quizTarget');
   const quizFeedback = document.getElementById('quizFeedback');
 
-  // ── スライダーイベント ──
+  // UI要素 (水面波)
+  const tabRefraction      = document.getElementById('tabRefraction');
+  const tabWave            = document.getElementById('tabWave');
+  const refractionControls = document.getElementById('refractionControls');
+  const waveControls       = document.getElementById('waveControls');
+  const waveAmpSlider      = document.getElementById('waveAmpSlider');
+  const waveSpeedSlider    = document.getElementById('waveSpeedSlider');
+  const waveFreqSlider     = document.getElementById('waveFreqSlider');
+  const waveViscSlider     = document.getElementById('waveViscSlider');
+  const waveAmpVal          = document.getElementById('waveAmpVal');
+  const waveSpeedVal        = document.getElementById('waveSpeedVal');
+  const waveFreqVal         = document.getElementById('waveFreqVal');
+  const waveViscVal         = document.getElementById('waveViscVal');
+  const toolPenBtn         = document.getElementById('toolPenBtn');
+  const toolEraserBtn       = document.getElementById('toolEraserBtn');
+
+  // モード初期設定
+  document.body.classList.add('mode-refraction');
+
+  // ── モード切り替えタブ ──
+  tabRefraction.addEventListener('click', () => {
+    if (currentMode === 'refraction') return;
+    currentMode = 'refraction';
+    tabRefraction.classList.add('active');
+    tabWave.classList.remove('active');
+    document.body.classList.remove('mode-wave');
+    document.body.classList.add('mode-refraction');
+    refractionControls.classList.remove('hidden');
+    waveControls.classList.add('hidden');
+
+    // 水面波のループを停止し、屈折のプレビューを描画
+    waveSim.stop();
+    previewDraw();
+  });
+
+  tabWave.addEventListener('click', () => {
+    if (currentMode === 'wave') return;
+    currentMode = 'wave';
+    tabWave.classList.add('active');
+    tabRefraction.classList.remove('active');
+    document.body.classList.remove('mode-refraction');
+    document.body.classList.add('mode-wave');
+    waveControls.classList.remove('hidden');
+    refractionControls.classList.add('hidden');
+
+    // 屈折シミュレーションの的を非表示にし、水面波パラメータを設定してループ開始
+    sim.clearTarget();
+    waveSim.setParams(getWaveParams());
+    waveSim.run();
+  });
+
+  // ── スライダーイベント (屈折) ──
   angleSlider.addEventListener('input', () => {
     const v = parseFloat(angleSlider.value);
     angleVal.textContent = `${v.toFixed(1)}°`;
@@ -56,6 +114,7 @@
 
   /** スライダー変更時にリアルタイムプレビュー（アニメなし） */
   function previewDraw() {
+    if (currentMode !== 'refraction') return;
     const params = getParams();
     sim.draw(params, 1);
     const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
@@ -83,7 +142,7 @@
     refractedDisplay.textContent = isTIR ? '全反射' : theta2.toFixed(2);
   }
 
-  /** 現在のパラメータを取得 */
+  /** 現在のパラメータを取得 (屈折) */
   function getParams() {
     return {
       theta1: parseFloat(angleSlider.value),
@@ -92,8 +151,8 @@
     };
   }
 
-  // ── プリセットボタン ──
-  document.querySelectorAll('.preset-btn').forEach(btn => {
+  // ── プリセットボタン (屈折) ──
+  document.querySelectorAll('.preset-btn:not(.wave-preset-btn)').forEach(btn => {
     btn.addEventListener('click', () => {
       const n1 = parseFloat(btn.dataset.n1);
       const n2 = parseFloat(btn.dataset.n2);
@@ -106,23 +165,168 @@
     });
   });
 
+  // ── スライダーイベント (水面波) ──
+  function getWaveParams() {
+    return {
+      amplitude: parseFloat(waveAmpSlider.value),
+      speed: parseFloat(waveSpeedSlider.value),
+      frequency: parseFloat(waveFreqSlider.value),
+      viscosity: parseFloat(waveViscSlider.value),
+    };
+  }
+
+  function updateWaveParams() {
+    const params = getWaveParams();
+    waveSim.setParams(params);
+  }
+
+  function getViscosityLabel(v) {
+    if (v >= 0.995) return '極低 (さらさら)';
+    if (v >= 0.990) return '低';
+    if (v >= 0.980) return '普通';
+    if (v >= 0.965) return '高';
+    return '極高 (どろどろ)';
+  }
+
+  waveAmpSlider.addEventListener('input', () => {
+    waveAmpVal.textContent = parseFloat(waveAmpSlider.value).toFixed(1);
+    updateWaveParams();
+  });
+
+  waveSpeedSlider.addEventListener('input', () => {
+    waveSpeedVal.textContent = parseFloat(waveSpeedSlider.value).toFixed(2);
+    updateWaveParams();
+  });
+
+  waveFreqSlider.addEventListener('input', () => {
+    waveFreqVal.textContent = `${parseFloat(waveFreqSlider.value).toFixed(1)}Hz`;
+    updateWaveParams();
+  });
+
+  waveViscSlider.addEventListener('input', () => {
+    const v = parseFloat(waveViscSlider.value);
+    waveViscVal.textContent = getViscosityLabel(v);
+    updateWaveParams();
+  });
+
+  // 初期粘度ラベルの表示
+  waveViscVal.textContent = getViscosityLabel(parseFloat(waveViscSlider.value));
+
+  // ── プリセットボタン (水面波) ──
+  document.querySelectorAll('.wave-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = btn.dataset.preset;
+      waveSim.setPreset(preset);
+    });
+  });
+
+  // ── 障害物ペンの切り替え (水面波) ──
+  let activeTool = 'pen'; // 'pen' または 'eraser'
+  let isDrawing = false;
+
+  toolPenBtn.addEventListener('click', () => {
+    activeTool = 'pen';
+    toolPenBtn.classList.add('active');
+    toolEraserBtn.classList.remove('active');
+  });
+
+  toolEraserBtn.addEventListener('click', () => {
+    activeTool = 'eraser';
+    toolEraserBtn.classList.add('active');
+    toolPenBtn.classList.remove('active');
+  });
+
+  // キャンバスドラッグ操作 (水面波)
+  const canvas = document.getElementById('simCanvas');
+
+  function getMousePos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (currentMode !== 'wave') return;
+    isDrawing = true;
+    const pos = getMousePos(e);
+    handleDraw(pos.x, pos.y);
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (currentMode !== 'wave' || !isDrawing) return;
+    const pos = getMousePos(e);
+    handleDraw(pos.x, pos.y);
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDrawing = false;
+  });
+
+  // タッチデバイス対応
+  canvas.addEventListener('touchstart', (e) => {
+    if (currentMode !== 'wave') return;
+    isDrawing = true;
+    const touch = e.touches[0];
+    const pos = getMousePos(touch);
+    handleDraw(pos.x, pos.y);
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (currentMode !== 'wave' || !isDrawing) return;
+    const touch = e.touches[0];
+    const pos = getMousePos(touch);
+    handleDraw(pos.x, pos.y);
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', () => {
+    isDrawing = false;
+  });
+
+  function handleDraw(cx, cy) {
+    if (activeTool === 'pen') {
+      waveSim.addObstacle(cx, cy, 3);
+    } else {
+      waveSim.removeObstacle(cx, cy, 4);
+    }
+  }
+
   // ── 実行ボタン ──
   runBtn.addEventListener('click', () => {
-    const params = getParams();
-    const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
+    if (currentMode === 'refraction') {
+      const params = getParams();
+      const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
 
-    // アニメーション実行
-    sim.run(params);
+      // アニメーション実行
+      sim.run(params);
 
-    // バッジ・警告更新
-    updateBadges(isTIR, theta2);
-    tirWarning.classList.toggle('hidden', !isTIR);
-    updateFormulaPreview();
+      // バッジ・警告更新
+      updateBadges(isTIR, theta2);
+      tirWarning.classList.toggle('hidden', !isTIR);
+      updateFormulaPreview();
 
-    // ログ記録
-    const entry = logger.add(params, { theta2, isTIR });
-    addLogRow(entry);
-    logCount.textContent = `${logger.logs.length} 件`;
+      // ログ記録
+      const entry = logger.add(params, { theta2, isTIR });
+      addLogRow(entry);
+      logCount.textContent = `${logger.logs.length} 件`;
+    } else {
+      // 水面波モード
+      const params = getWaveParams();
+      
+      // シミュレーションの状態を一度クリアして再スタートさせる
+      waveSim.clear();
+
+      // ログ記録 (タイプ: 'wave', 障害物の有無を含める)
+      const entry = logger.add(params, {
+        type: 'wave',
+        hasObstacles: waveSim.hasObstacles()
+      });
+      addLogRow(entry);
+      logCount.textContent = `${logger.logs.length} 件`;
+    }
 
     // ボタンフラッシュ
     runBtn.style.background = '#33DDFF';
@@ -136,17 +340,59 @@
     if (emptyRow) emptyRow.remove();
 
     const tr = document.createElement('tr');
-    const resultHtml = entry.isTIR
-      ? `<span class="result-tir">全反射</span>`
-      : `<span class="result-ok">屈折</span>`;
-    const theta2Text = entry.isTIR ? '—' : entry.theta2.toFixed(2) + '°';
+    
+    // タイプの表記とクラス
+    const isQuiz = entry.type === 'quiz';
+    const isWave = entry.type === 'wave';
+    
+    let typeHtml = `<span class="log-type-normal">通常</span>`;
+    if (isQuiz) {
+      typeHtml = `<span class="log-type-quiz">クイズ</span>`;
+    } else if (isWave) {
+      typeHtml = `<span class="log-type-quiz" style="color:var(--ray-ref);">水面波</span>`;
+    }
+
+    // 結果の表記とクラス
+    let resultHtml = '';
+    if (isWave) {
+      resultHtml = entry.hasObstacles
+        ? `<span class="result-ok">障害物あり</span>`
+        : `<span class="result-correct" style="color:var(--text-muted);">なし</span>`;
+    } else if (isQuiz) {
+      if (entry.fixedOk === false) {
+        resultHtml = `<span class="result-miss">ルール違反</span>`;
+      } else if (entry.quizStatus === 'correct') {
+        resultHtml = `<span class="result-correct">正解</span>`;
+      } else {
+        resultHtml = `<span class="result-miss">不正解</span>`;
+      }
+      if (entry.isTIR) {
+        resultHtml += ` <span class="result-tir">(全反射)</span>`;
+      }
+    } else {
+      resultHtml = entry.isTIR
+        ? `<span class="result-tir">全反射</span>`
+        : `<span class="result-ok">屈折</span>`;
+    }
+
+    let theta1Text = '';
+    let theta2Text = '';
+    
+    if (isWave) {
+      theta1Text = entry.theta1.toFixed(1) + 'Hz';
+      theta2Text = entry.theta2 ? entry.theta2.toFixed(3) : '—';
+    } else {
+      theta1Text = entry.theta1.toFixed(1) + '°';
+      theta2Text = entry.isTIR ? '—' : entry.theta2.toFixed(2) + '°';
+    }
 
     tr.innerHTML = `
       <td>${entry.id}</td>
       <td>${logger.formatDateShort(entry.timestamp)}</td>
+      <td>${typeHtml}</td>
       <td>${entry.n1.toFixed(2)}</td>
       <td>${entry.n2.toFixed(2)}</td>
-      <td>${entry.theta1.toFixed(1)}°</td>
+      <td>${theta1Text}</td>
       <td>${theta2Text}</td>
       <td>${resultHtml}</td>
     `;
@@ -166,7 +412,7 @@
   clearLogBtn.addEventListener('click', () => {
     if (!confirm('ログを全件削除しますか？')) return;
     logger.clear();
-    logBody.innerHTML = `<tr class="log-empty"><td colspan="7">まだログがありません。シミュレーションを実行してください。</td></tr>`;
+    logBody.innerHTML = `<tr class="log-empty"><td colspan="8">まだログがありません。シミュレーションを実行してください。</td></tr>`;
     logCount.textContent = '0 件';
   });
 
@@ -204,11 +450,24 @@
   checkQuizBtn.addEventListener('click', () => {
     const params = getParams();
     const result = quiz.evaluate(params);
+    const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
+
     sim.run(params);
     quizFeedback.textContent = result.message;
     quizFeedback.className = `quiz-feedback ${result.status === 'correct' ? 'is-correct' : 'is-miss'}`;
     quizState.textContent = result.status === 'correct' ? '正解' : '判定済み';
     quizState.className = `quiz-state mono ${result.status === 'correct' ? 'is-correct' : 'is-miss'}`;
+
+    // ログ記録
+    const entry = logger.add(params, {
+      theta2: isTIR ? null : theta2,
+      isTIR,
+      type: 'quiz',
+      quizStatus: result.status,
+      fixedOk: result.checks.fixedOk
+    });
+    addLogRow(entry);
+    logCount.textContent = `${logger.logs.length} 件`;
   });
 
   revealQuizBtn.addEventListener('click', () => {

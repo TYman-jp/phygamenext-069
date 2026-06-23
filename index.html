@@ -16,7 +16,11 @@
       <span class="logo-icon">⬡</span>
       <span class="logo-text">PhyGame<span class="logo-accent">Next</span></span>
     </div>
-    <div class="header-badge">光学シミュレーター v1.0</div>
+    <div class="mode-tabs">
+      <button class="tab-btn active" id="tabRefraction">光の屈折</button>
+      <button class="tab-btn" id="tabWave">水面波</button>
+    </div>
+    <div class="header-badge">物理シミュレーター v1.1</div>
   </header>
 
   <main>
@@ -35,62 +39,123 @@
     <div class="control-log-grid">
       <!-- コントロールパネル -->
       <section class="control-panel">
-        <div class="section-label">PARAMETERS</div>
+        <!-- 光の屈折パラメータ -->
+        <div id="refractionControls">
+          <div class="section-label">PARAMETERS (屈折)</div>
 
-        <div class="param-block">
-          <label class="param-label">
-            入射角
-            <span class="param-value mono" id="angleVal">45.0°</span>
-          </label>
-          <input type="range" id="angleSlider" min="0" max="89" step="0.5" value="45" class="slider">
-          <div class="range-hints"><span>0°</span><span>89°</span></div>
-        </div>
+          <div class="param-block">
+            <label class="param-label">
+              入射角
+              <span class="param-value mono" id="angleVal">45.0°</span>
+            </label>
+            <input type="range" id="angleSlider" min="0" max="89" step="0.5" value="45" class="slider">
+            <div class="range-hints"><span>0°</span><span>89°</span></div>
+          </div>
 
-        <div class="param-block">
-          <label class="param-label">
-            媒質1 屈折率 <em class="param-sub">n₁</em>
-            <span class="param-value mono" id="n1Val">1.00</span>
-          </label>
-          <input type="range" id="n1Slider" min="1.00" max="3.00" step="0.01" value="1.00" class="slider slider--orange">
-          <div class="range-hints"><span>1.00（空気）</span><span>3.00</span></div>
-        </div>
+          <div class="param-block">
+            <label class="param-label">
+              媒質1 屈折率 <em class="param-sub">n₁</em>
+              <span class="param-value mono" id="n1Val">1.00</span>
+            </label>
+            <input type="range" id="n1Slider" min="1.00" max="3.00" step="0.01" value="1.00" class="slider slider--orange">
+            <div class="range-hints"><span>1.00（空気）</span><span>3.00</span></div>
+          </div>
 
-        <div class="param-block">
-          <label class="param-label">
-            媒質2 屈折率 <em class="param-sub">n₂</em>
-            <span class="param-value mono" id="n2Val">1.50</span>
-          </label>
-          <input type="range" id="n2Slider" min="1.00" max="3.00" step="0.01" value="1.50" class="slider slider--orange">
-          <div class="range-hints"><span>1.00</span><span>3.00（ダイヤ≈2.42）</span></div>
-        </div>
+          <div class="param-block">
+            <label class="param-label">
+              媒質2 屈折率 <em class="param-sub">n₂</em>
+              <span class="param-value mono" id="n2Val">1.50</span>
+            </label>
+            <input type="range" id="n2Slider" min="1.00" max="3.00" step="0.01" value="1.50" class="slider slider--orange">
+            <div class="range-hints"><span>1.00</span><span>3.00（ダイヤ≈2.42）</span></div>
+          </div>
 
-        <div class="preset-row">
-          <span class="param-label" style="margin-bottom:8px;display:block;">プリセット</span>
-          <div class="preset-buttons">
-            <button class="preset-btn" data-n1="1.00" data-n2="1.33" data-angle="45">空気→水</button>
-            <button class="preset-btn" data-n1="1.00" data-n2="1.50" data-angle="45">空気→ガラス</button>
-            <button class="preset-btn" data-n1="1.00" data-n2="2.42" data-angle="30">空気→ダイヤ</button>
-            <button class="preset-btn" data-n1="1.33" data-n2="1.00" data-angle="40">水→空気</button>
+          <div class="preset-row">
+            <span class="param-label" style="margin-bottom:8px;display:block;">プリセット</span>
+            <div class="preset-buttons">
+              <button class="preset-btn" data-n1="1.00" data-n2="1.33" data-angle="45">空気→水</button>
+              <button class="preset-btn" data-n1="1.00" data-n2="1.50" data-angle="45">空気→ガラス</button>
+              <button class="preset-btn" data-n1="1.00" data-n2="2.42" data-angle="30">空気→ダイヤ</button>
+              <button class="preset-btn" data-n1="1.33" data-n2="1.00" data-angle="40">水→空気</button>
+            </div>
+          </div>
+
+          <div class="formula-box">
+            <div class="formula-title">スネルの法則</div>
+            <div class="formula mono">n₁ · sin(θ₁) = n₂ · sin(θ₂)</div>
+            <div class="formula-result" id="formulaResult">—</div>
+          </div>
+
+          <div class="tir-warning hidden" id="tirWarning">
+            ⚠ 全反射が発生しています（臨界角超過）
           </div>
         </div>
 
-        <div class="formula-box">
-          <div class="formula-title">スネルの法則</div>
-          <div class="formula mono">n₁ · sin(θ₁) = n₂ · sin(θ₂)</div>
-          <div class="formula-result" id="formulaResult">—</div>
+        <!-- 水面波パラメータ (初期状態は非表示) -->
+        <div id="waveControls" class="hidden">
+          <div class="section-label">PARAMETERS (水面波)</div>
+          
+          <div class="param-block">
+            <label class="param-label">
+              波の高さ（振幅）
+              <span class="param-value mono" id="waveAmpVal">5.0</span>
+            </label>
+            <input type="range" id="waveAmpSlider" min="1.0" max="10.0" step="0.5" value="5.0" class="slider">
+            <div class="range-hints"><span>低</span><span>高</span></div>
+          </div>
+
+          <div class="param-block">
+            <label class="param-label">
+              波の速さ（伝播速度）
+              <span class="param-value mono" id="waveSpeedVal">0.50</span>
+            </label>
+            <input type="range" id="waveSpeedSlider" min="0.10" max="1.00" step="0.05" value="0.50" class="slider slider--orange">
+            <div class="range-hints"><span>遅い</span><span>速い</span></div>
+          </div>
+
+          <div class="param-block">
+            <label class="param-label">
+              周波数（発生頻度）
+              <span class="param-value mono" id="waveFreqVal">2.0Hz</span>
+            </label>
+            <input type="range" id="waveFreqSlider" min="0.5" max="5.0" step="0.1" value="2.0" class="slider">
+            <div class="range-hints"><span>粗い</span><span>細かい</span></div>
+          </div>
+
+          <div class="param-block">
+            <label class="param-label">
+              液体の粘度（減衰）
+              <span class="param-value mono" id="waveViscVal">普通</span>
+            </label>
+            <input type="range" id="waveViscSlider" min="0.950" max="0.998" step="0.002" value="0.986" class="slider slider--orange">
+            <div class="range-hints"><span>高（どろどろ）</span><span>低（さらさら）</span></div>
+          </div>
+
+          <div class="preset-row">
+            <span class="param-label" style="margin-bottom:8px;display:block;">プリセット / 操作</span>
+            <div class="preset-buttons" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
+              <button class="preset-btn wave-preset-btn" data-preset="slit">単一スリット</button>
+              <button class="preset-btn wave-preset-btn" data-preset="double-slit">二重スリット</button>
+              <button class="preset-btn wave-preset-btn" data-preset="pillar">円柱障害物</button>
+              <button class="preset-btn wave-preset-btn" data-preset="clear">全消去</button>
+            </div>
+            <div class="tool-selector">
+              <span class="param-label" style="margin-bottom:6px;display:block;font-size:0.75rem;">マウス操作ツール</span>
+              <div style="display:flex; gap:8px;">
+                <button id="toolPenBtn" class="tool-btn active">障害物ペン</button>
+                <button id="toolEraserBtn" class="tool-btn">消しゴム</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <button id="runBtn" class="run-button">
           <span class="run-icon">▶</span> シミュレーション実行
         </button>
-
-        <div class="tir-warning hidden" id="tirWarning">
-          ⚠ 全反射が発生しています（臨界角超過）
-        </div>
       </section>
 
       <!-- クイズパネル -->
-      <section class="quiz-panel">
+      <section class="quiz-panel" id="quizPanel">
         <div class="quiz-header">
           <div>
             <div class="section-label">REFRACTION QUIZ</div>
@@ -142,6 +207,7 @@
               <tr>
                 <th>#</th>
                 <th>実行日時</th>
+                <th>タイプ</th>
                 <th>n₁</th>
                 <th>n₂</th>
                 <th>入射角</th>
@@ -151,7 +217,7 @@
             </thead>
             <tbody id="logBody">
               <tr class="log-empty">
-                <td colspan="7">まだログがありません。シミュレーションを実行してください。</td>
+                <td colspan="8">まだログがありません。シミュレーションを実行してください。</td>
               </tr>
             </tbody>
           </table>
@@ -161,6 +227,7 @@
   </main>
 
   <script src="simulation.js"></script>
+  <script src="wave_simulation.js"></script>
   <script src="logger.js"></script>
   <script src="quiz.js"></script>
   <script src="app.js"></script>

@@ -147,6 +147,15 @@ main {
   gap: 20px;
   align-items: start;
 }
+body.mode-wave .control-log-grid {
+  grid-template-columns: 340px 1fr;
+}
+body.mode-wave #quizPanel {
+  display: none !important;
+}
+body.mode-wave .canvas-overlay {
+  display: none !important;
+}
 
 /* ── Control Panel ── */
 .control-panel {
@@ -501,13 +510,86 @@ main {
 
 .result-ok { color: var(--ray-in); }
 .result-tir { color: var(--warning); }
+.log-type-quiz { color: var(--ray-ref); font-weight: 500; }
+.log-type-normal { color: var(--text-muted); }
+.result-correct { color: #36E58A; }
+.result-miss { color: var(--warning); }
 
 .log-table tbody tr:last-child td { animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
 
 /* ── Responsive ── */
 @media (max-width: 900px) {
-  .control-log-grid { grid-template-columns: 1fr; }
+  .control-log-grid { grid-template-columns: 1fr !important; }
   header { padding: 14px 18px; }
   main { padding: 18px 14px 36px; }
+}
+
+/* ── Mode Tabs ── */
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(30, 58, 95, 0.2);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: var(--text);
+}
+
+.tab-btn.active {
+  background: var(--panel2);
+  color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.15);
+}
+
+/* ── Mouse Tool Selector ── */
+.tool-selector {
+  border-top: 1px solid rgba(30, 58, 95, 0.3);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.tool-btn {
+  flex: 1;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.tool-btn.active {
+  background: rgba(0, 212, 255, 0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
 }
