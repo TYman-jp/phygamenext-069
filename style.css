@@ -140,15 +140,22 @@ main {
   color: var(--ray-ref);
 }
 
-/* ── Control + Log Grid ── */
+/* ── Simulation View Wrapper ── */
+#simulationView {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── Control + Quiz Grid (旧 control-log-grid) ── */
 .control-log-grid {
   display: grid;
-  grid-template-columns: 340px minmax(280px, 360px) 1fr;
+  grid-template-columns: 340px 1fr;
   gap: 20px;
   align-items: start;
 }
 body.mode-wave .control-log-grid {
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: 340px;
 }
 body.mode-wave #quizPanel {
   display: none !important;
@@ -518,9 +525,24 @@ body.mode-wave .canvas-overlay {
 .log-table tbody tr:last-child td { animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
 
+/* ── ログタブ専用ビュー (屈折ログ / 水面波ログを横並び表示) ── */
+#logView { width: 100%; }
+
+.log-view-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.log-view-grid .log-panel {
+  min-height: 540px;
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .control-log-grid { grid-template-columns: 1fr !important; }
+  .log-view-grid { grid-template-columns: 1fr !important; }
   header { padding: 14px 18px; }
   main { padding: 18px 14px 36px; }
 }

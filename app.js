@@ -1,6 +1,6 @@
 /**
  * app.js
- * アプリケーションコントローラー (光の屈折 / 水面波 両対応)
+ * アプリケーションコントローラー (光の屈折 / 水面波 / ログ 3モード対応)
  */
 
 (function () {
@@ -10,14 +10,14 @@
   const logger = new SimulationLogger();
   const quiz = new RefractionQuiz(sim);
 
-  let currentMode = 'refraction'; // 'refraction' または 'wave'
+  let currentMode = 'refraction'; // 'refraction' | 'wave' | 'log'
 
   // UI要素 (共通)
   const runBtn      = document.getElementById('runBtn');
-  const logBody     = document.getElementById('logBody');
-  const logCount    = document.getElementById('logCount');
-  const clearLogBtn = document.getElementById('clearLog');
-  const exportLogBtn = document.getElementById('exportLog');
+
+  // UI要素 (表示切り替え用コンテナ)
+  const simulationView = document.getElementById('simulationView');
+  const logView         = document.getElementById('logView');
 
   // UI要素 (屈折)
   const angleSlider = document.getElementById('angleSlider');
@@ -43,6 +43,7 @@
   // UI要素 (水面波)
   const tabRefraction      = document.getElementById('tabRefraction');
   const tabWave            = document.getElementById('tabWave');
+  const tabLog              = document.getElementById('tabLog');
   const refractionControls = document.getElementById('refractionControls');
   const waveControls       = document.getElementById('waveControls');
   const waveAmpSlider      = document.getElementById('waveAmpSlider');
@@ -56,6 +57,18 @@
   const toolPenBtn         = document.getElementById('toolPenBtn');
   const toolEraserBtn       = document.getElementById('toolEraserBtn');
 
+  // UI要素 (ログタブ — 屈折系)
+  const refractionLogBody  = document.getElementById('refractionLogBody');
+  const refractionLogCount = document.getElementById('refractionLogCount');
+  const clearRefractionLog = document.getElementById('clearRefractionLog');
+  const exportRefractionLog = document.getElementById('exportRefractionLog');
+
+  // UI要素 (ログタブ — 水面波系)
+  const waveLogBody  = document.getElementById('waveLogBody');
+  const waveLogCount = document.getElementById('waveLogCount');
+  const clearWaveLog = document.getElementById('clearWaveLog');
+  const exportWaveLog = document.getElementById('exportWaveLog');
+
   // モード初期設定
   document.body.classList.add('mode-refraction');
 
@@ -65,10 +78,14 @@
     currentMode = 'refraction';
     tabRefraction.classList.add('active');
     tabWave.classList.remove('active');
+    tabLog.classList.remove('active');
     document.body.classList.remove('mode-wave');
     document.body.classList.add('mode-refraction');
     refractionControls.classList.remove('hidden');
     waveControls.classList.add('hidden');
+
+    simulationView.classList.remove('hidden');
+    logView.classList.add('hidden');
 
     // 水面波のループを停止し、屈折のプレビューを描画
     waveSim.stop();
@@ -80,15 +97,38 @@
     currentMode = 'wave';
     tabWave.classList.add('active');
     tabRefraction.classList.remove('active');
+    tabLog.classList.remove('active');
     document.body.classList.remove('mode-refraction');
     document.body.classList.add('mode-wave');
     waveControls.classList.remove('hidden');
     refractionControls.classList.add('hidden');
 
+    simulationView.classList.remove('hidden');
+    logView.classList.add('hidden');
+
     // 屈折シミュレーションの的を非表示にし、水面波パラメータを設定してループ開始
     sim.clearTarget();
     waveSim.setParams(getWaveParams());
     waveSim.run();
+  });
+
+  tabLog.addEventListener('click', () => {
+    if (currentMode === 'log') return;
+    currentMode = 'log';
+    tabLog.classList.add('active');
+    tabRefraction.classList.remove('active');
+    tabWave.classList.remove('active');
+
+    // シミュレーション表示を隠し、ログ表示に切り替え
+    simulationView.classList.add('hidden');
+    logView.classList.remove('hidden');
+
+    // 水面波ループは表示されていない間は停止しておく
+    waveSim.stop();
+
+    // 最新のログ内容を再描画
+    renderRefractionLogs();
+    renderWaveLogs();
   });
 
   // ── スライダーイベント (屈折) ──
@@ -308,24 +348,22 @@
       tirWarning.classList.toggle('hidden', !isTIR);
       updateFormulaPreview();
 
-      // ログ記録
-      const entry = logger.add(params, { theta2, isTIR });
-      addLogRow(entry);
-      logCount.textContent = `${logger.logs.length} 件`;
-    } else {
+      // ログ記録 (屈折系ログへ)
+      logger.add(params, { theta2, isTIR });
+      renderRefractionLogs();
+    } else if (currentMode === 'wave') {
       // 水面波モード
       const params = getWaveParams();
-      
+
       // シミュレーションの状態を一度クリアして再スタートさせる
       waveSim.clear();
 
       // ログ記録 (タイプ: 'wave', 障害物の有無を含める)
-      const entry = logger.add(params, {
+      logger.add(params, {
         type: 'wave',
         hasObstacles: waveSim.hasObstacles()
       });
-      addLogRow(entry);
-      logCount.textContent = `${logger.logs.length} 件`;
+      renderWaveLogs();
     }
 
     // ボタンフラッシュ
@@ -333,18 +371,13 @@
     setTimeout(() => { runBtn.style.background = ''; }, 200);
   });
 
-  /** ログ行をテーブルに追加（先頭挿入） */
-  function addLogRow(entry) {
-    // 空メッセージ行があれば削除
-    const emptyRow = logBody.querySelector('.log-empty');
-    if (emptyRow) emptyRow.remove();
-
+  /** ログ1件分のテーブル行を生成 (タイプに応じて表記を切り替え) */
+  function buildLogRow(entry) {
     const tr = document.createElement('tr');
-    
-    // タイプの表記とクラス
+
     const isQuiz = entry.type === 'quiz';
     const isWave = entry.type === 'wave';
-    
+
     let typeHtml = `<span class="log-type-normal">通常</span>`;
     if (isQuiz) {
       typeHtml = `<span class="log-type-quiz">クイズ</span>`;
@@ -352,7 +385,6 @@
       typeHtml = `<span class="log-type-quiz" style="color:var(--ray-ref);">水面波</span>`;
     }
 
-    // 結果の表記とクラス
     let resultHtml = '';
     if (isWave) {
       resultHtml = entry.hasObstacles
@@ -377,7 +409,7 @@
 
     let theta1Text = '';
     let theta2Text = '';
-    
+
     if (isWave) {
       theta1Text = entry.theta1.toFixed(1) + 'Hz';
       theta2Text = entry.theta2 ? entry.theta2.toFixed(3) : '—';
@@ -396,30 +428,67 @@
       <td>${theta2Text}</td>
       <td>${resultHtml}</td>
     `;
-    logBody.insertBefore(tr, logBody.firstChild);
+    return tr;
   }
 
-  /** 起動時に保存済みログを復元 */
-  function restoreLogs() {
-    if (logger.logs.length === 0) return;
-    logBody.innerHTML = '';
-    // 最新50件を表示
-    logger.logs.slice(0, 50).forEach(entry => addLogRow(entry));
-    logCount.textContent = `${logger.logs.length} 件`;
+  /** 屈折系ログ (通常 + クイズ) をテーブルへ再描画 */
+  function renderRefractionLogs() {
+    const logs = logger.refractionLogs;
+    refractionLogBody.innerHTML = '';
+    if (logs.length === 0) {
+      refractionLogBody.innerHTML = `<tr class="log-empty"><td colspan="8">まだログがありません。光の屈折シミュレーションを実行してください。</td></tr>`;
+    } else {
+      // 最新50件を表示
+      logs.slice(0, 50).forEach(entry => {
+        refractionLogBody.appendChild(buildLogRow(entry));
+      });
+    }
+    refractionLogCount.textContent = `${logs.length} 件`;
   }
 
-  // ── クリアボタン ──
-  clearLogBtn.addEventListener('click', () => {
-    if (!confirm('ログを全件削除しますか？')) return;
-    logger.clear();
-    logBody.innerHTML = `<tr class="log-empty"><td colspan="8">まだログがありません。シミュレーションを実行してください。</td></tr>`;
-    logCount.textContent = '0 件';
+  /** 水面波ログをテーブルへ再描画 */
+  function renderWaveLogs() {
+    const logs = logger.waveLogs;
+    waveLogBody.innerHTML = '';
+    if (logs.length === 0) {
+      waveLogBody.innerHTML = `<tr class="log-empty"><td colspan="8">まだログがありません。水面波シミュレーションを実行してください。</td></tr>`;
+    } else {
+      // 最新50件を表示
+      logs.slice(0, 50).forEach(entry => {
+        waveLogBody.appendChild(buildLogRow(entry));
+      });
+    }
+    waveLogCount.textContent = `${logs.length} 件`;
+  }
+
+  // ── 屈折系ログ: クリア / CSV エクスポート ──
+  clearRefractionLog.addEventListener('click', () => {
+    if (logger.refractionLogs.length === 0) return;
+    if (!confirm('光の屈折ログ（通常・クイズ）を全件削除しますか？')) return;
+    logger.clear('refraction');
+    renderRefractionLogs();
   });
 
-  // ── CSV エクスポート ──
-  exportLogBtn.addEventListener('click', () => {
-    if (logger.logs.length === 0) { alert('エクスポートするログがありません。'); return; }
-    const csv = logger.toCSV();
+  exportRefractionLog.addEventListener('click', () => {
+    if (logger.refractionLogs.length === 0) { alert('エクスポートする屈折ログがありません。'); return; }
+    downloadCSV(logger.toCSV('refraction'), 'refraction');
+  });
+
+  // ── 水面波ログ: クリア / CSV エクスポート ──
+  clearWaveLog.addEventListener('click', () => {
+    if (logger.waveLogs.length === 0) return;
+    if (!confirm('水面波ログを全件削除しますか？')) return;
+    logger.clear('wave');
+    renderWaveLogs();
+  });
+
+  exportWaveLog.addEventListener('click', () => {
+    if (logger.waveLogs.length === 0) { alert('エクスポートする水面波ログがありません。'); return; }
+    downloadCSV(logger.toCSV('wave'), 'wave');
+  });
+
+  /** CSV ダウンロード共通処理 */
+  function downloadCSV(csv, suffix) {
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -427,10 +496,10 @@
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_` +
                `${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
-    a.download = `phygame_log_${ts}.csv`;
+    a.download = `phygame_log_${suffix}_${ts}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  });
+  }
 
   // ── クイズ機能 ──
   newQuizBtn.addEventListener('click', () => {
@@ -458,16 +527,15 @@
     quizState.textContent = result.status === 'correct' ? '正解' : '判定済み';
     quizState.className = `quiz-state mono ${result.status === 'correct' ? 'is-correct' : 'is-miss'}`;
 
-    // ログ記録
-    const entry = logger.add(params, {
+    // ログ記録 (屈折系ログへ)
+    logger.add(params, {
       theta2: isTIR ? null : theta2,
       isTIR,
       type: 'quiz',
       quizStatus: result.status,
       fixedOk: result.checks.fixedOk
     });
-    addLogRow(entry);
-    logCount.textContent = `${logger.logs.length} 件`;
+    renderRefractionLogs();
   });
 
   revealQuizBtn.addEventListener('click', () => {
@@ -500,5 +568,6 @@
   // ── 起動 ──
   updateFormulaPreview();
   previewDraw();
-  restoreLogs();
+  renderRefractionLogs();
+  renderWaveLogs();
 })();
