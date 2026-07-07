@@ -22,6 +22,9 @@
       <button class="tab-btn" id="tabLog">ログ</button>
     </div>
     <div class="header-badge">物理シミュレーター v1.2</div>
+    <div style="margin-left:16px;">
+      <button class="tab-btn" id="changeNameBtn" style="padding:4px 12px; font-size:0.9rem; color:#A0AEC0; border-color:#2D3748;">名前変更</button>
+    </div>
   </header>
 
   <main>
@@ -217,6 +220,7 @@
                 <tr>
                   <th>#</th>
                   <th>実行日時</th>
+                  <th>名前</th>
                   <th>タイプ</th>
                   <th>n₁</th>
                   <th>n₂</th>
@@ -227,7 +231,7 @@
               </thead>
               <tbody id="refractionLogBody">
                 <tr class="log-empty">
-                  <td colspan="8">まだログがありません。光の屈折シミュレーションを実行してください。</td>
+                  <td colspan="9">まだログがありません。光の屈折シミュレーションを実行してください。</td>
                 </tr>
               </tbody>
             </table>
@@ -252,6 +256,7 @@
                 <tr>
                   <th>#</th>
                   <th>実行日時</th>
+                  <th>名前</th>
                   <th>タイプ</th>
                   <th>振幅</th>
                   <th>速さ</th>
@@ -262,7 +267,7 @@
               </thead>
               <tbody id="waveLogBody">
                 <tr class="log-empty">
-                  <td colspan="8">まだログがありません。水面波シミュレーションを実行してください。</td>
+                  <td colspan="9">まだログがありません。水面波シミュレーションを実行してください。</td>
                 </tr>
               </tbody>
             </table>
@@ -271,6 +276,18 @@
       </div>
     </div>
   </main>
+
+  <!-- 名前入力モーダル -->
+  <div id="nameModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <h2 style="margin-top:0; color:var(--text-light); font-family:var(--font-heading);">名前を入力してください</h2>
+      <p style="color:var(--text-muted); font-size:0.95rem; margin-bottom:1.5rem;">シミュレーションのログに記録されます。</p>
+      <input type="text" id="nameInput" placeholder="あなたの名前" class="modal-input" maxlength="20">
+      <div style="text-align:right; margin-top:1.5rem;">
+        <button id="nameSubmitBtn" class="primary-btn">決定して開始</button>
+      </div>
+    </div>
+  </div>
 
   <script type="importmap">
     {

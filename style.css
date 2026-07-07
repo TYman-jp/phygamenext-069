@@ -615,3 +615,51 @@ body.mode-wave .canvas-overlay {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ── Modal Overlay ── */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(4, 7, 14, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.modal-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.modal-content {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  text-align: left;
+  width: 90%;
+  max-width: 400px;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.modal-input:focus {
+  border-color: var(--accent);
+}

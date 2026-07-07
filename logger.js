@@ -86,7 +86,7 @@ class SimulationLogger {
   _logsFor(cat) { return cat === 'wave' ? this.waveLogs : this.refractionLogs; }
 
   // ── ログ追加 (非同期) ──
-  async add(params, result) {
+  async add(params, result, userName = '') {
     const type = result.type || 'normal';
     const cat  = this._categoryFor(type);
     
@@ -96,6 +96,7 @@ class SimulationLogger {
     const entry = {
       localId: this.runCount,
       timestamp: now,
+      userName: userName,
       n1:    params.n1    !== undefined ? params.n1    : (params.amplitude || 0),
       n2:    params.n2    !== undefined ? params.n2    : (params.speed     || 0),
       theta1: params.theta1 !== undefined ? params.theta1 : (params.frequency || 0),
@@ -171,7 +172,7 @@ class SimulationLogger {
 
   // ── CSV 出力 ──
   toCSV(category) {
-    const headers = ['#','実行日時','タイプ','n1/振幅','n2/速さ','入射角/周波数','屈折角/粘度','結果'];
+    const headers = ['#','実行日時','名前','タイプ','n1/振幅','n2/速さ','入射角/周波数','屈折角/粘度','結果'];
     const src = category
       ? this._logsFor(category)
       : [...this.refractionLogs, ...this.waveLogs].sort((a, b) => b.localId - a.localId);
@@ -179,7 +180,7 @@ class SimulationLogger {
     const rows = src.map(e => {
       let tp = '通常';
       if (e.type === 'quiz') tp = 'クイズ';
-      if (e.type === 'wave') tp = '水面波';
+      // 水面波も「通常」とするため 'wave' の判定は除外
 
       let rs = '';
       if (e.type === 'wave') {
@@ -196,7 +197,7 @@ class SimulationLogger {
         : (e.isTIR  ? '—' : (e.theta2 ? e.theta2.toFixed(2) : '0.00'));
       const t1 = e.type === 'wave' ? e.theta1.toFixed(1)+'Hz' : e.theta1.toFixed(1)+'°';
 
-      return [e.localId || e.id, this._formatDate(e.timestamp), tp, e.n1.toFixed(2), e.n2.toFixed(2), t1, t2, rs];
+      return [e.localId || e.id, this._formatDate(e.timestamp), e.userName || '', tp, e.n1.toFixed(2), e.n2.toFixed(2), t1, t2, rs];
     });
     return [headers, ...rows].map(r => r.join(',')).join('\n');
   }

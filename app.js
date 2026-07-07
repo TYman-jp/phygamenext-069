@@ -11,6 +11,7 @@
   const quiz = new RefractionQuiz(sim);
 
   let currentMode = 'refraction'; // 'refraction' | 'wave' | 'log'
+  let currentUserName = localStorage.getItem('phyuserName') || '';
 
   // UI要素 (共通)
   const runBtn      = document.getElementById('runBtn');
@@ -68,6 +69,12 @@
   const waveLogCount = document.getElementById('waveLogCount');
   const clearWaveLog = document.getElementById('clearWaveLog');
   const exportWaveLog = document.getElementById('exportWaveLog');
+
+  // UI要素 (名前モーダル)
+  const nameModal = document.getElementById('nameModal');
+  const nameInput = document.getElementById('nameInput');
+  const nameSubmitBtn = document.getElementById('nameSubmitBtn');
+  const changeNameBtn = document.getElementById('changeNameBtn');
 
   // モード初期設定
   document.body.classList.add('mode-refraction');
@@ -350,7 +357,7 @@
       updateFormulaPreview();
 
       // ログ記録 (屈折系ログへ)
-      await logger.add(params, { theta2, isTIR });
+      await logger.add(params, { theta2, isTIR }, currentUserName);
       renderRefractionLogs();
     } else if (currentMode === 'wave') {
       // 水面波モード
@@ -363,7 +370,7 @@
       await logger.add(params, {
         type: 'wave',
         hasObstacles: waveSim.hasObstacles()
-      });
+      }, currentUserName);
       renderWaveLogs();
     }
 
@@ -422,6 +429,7 @@
     tr.innerHTML = `
       <td>${entry.id}</td>
       <td>${logger.formatDateShort(entry.timestamp)}</td>
+      <td>${entry.userName || '—'}</td>
       <td>${typeHtml}</td>
       <td>${entry.n1.toFixed(2)}</td>
       <td>${entry.n2.toFixed(2)}</td>
@@ -535,7 +543,7 @@
       type: 'quiz',
       quizStatus: result.status,
       fixedOk: result.checks.fixedOk
-    });
+    }, currentUserName);
     renderRefractionLogs();
   });
 
@@ -566,7 +574,38 @@
     previewDraw();
   }
 
-  // ── 起動 ──
+  // ── 起動と名前入力制御 ──
+  function initNameModal() {
+    if (!currentUserName) {
+      nameModal.classList.remove('hidden');
+    }
+    
+    changeNameBtn.addEventListener('click', () => {
+      nameInput.value = currentUserName;
+      nameModal.classList.remove('hidden');
+      nameInput.focus();
+    });
+
+    nameSubmitBtn.addEventListener('click', () => {
+      const val = nameInput.value.trim();
+      if (val) {
+        currentUserName = val;
+        localStorage.setItem('phyuserName', val);
+        nameModal.classList.add('hidden');
+      } else {
+        alert('名前を入力してください。');
+      }
+    });
+
+    // Enterキーでも決定可能に
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        nameSubmitBtn.click();
+      }
+    });
+  }
+
+  initNameModal();
   await logger.ready;
   updateFormulaPreview();
   previewDraw();
