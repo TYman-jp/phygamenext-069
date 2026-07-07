@@ -17,7 +17,7 @@
 - サーバー: Node.js 標準モジュールのみを使った静的ファイルサーバー
 - フロントエンド: HTML / CSS / プレーン JavaScript
 - 描画: HTML Canvas 2D API（屈折は通常描画、水面波は `ImageData` + オフスクリーンキャンバスによるピクセル描画）
-- 永続化: ブラウザの `localStorage` (キーをカテゴリ別に分離)
+- 永続化: サーバー側 JSON ファイル `data/logs.json`。サーバー未接続時の一時フォールバックとしてブラウザの `localStorage` を使う。
 - 依存パッケージ: 現状なし
 
 ## 起動と検証
@@ -77,10 +77,13 @@
 
 - `logger.js`
   - `SimulationLogger` クラスを定義する。
-  - 実行ログを `localStorage` の `phygame_logs_refraction` (屈折・クイズ用) と `phygame_logs_wave` (水面波用) に分離して保存する。
-  - コンストラクタ起動時に、旧キー `phygame_logs` が残っている場合は一度だけ自動的にデータを種別ごとに振り分けて移行（マイグレーション）する。
+  - 実行ログを `server.js` のログ API 経由でサーバー側へ保存・取得する。
+  - 保存先は `data/logs.json`。ファイルや `data` ディレクトリがない場合はサーバーが自動生成する。
+  - サーバー接続に失敗した場合のみ、一時フォールバックとして `localStorage` を使う。
+  - 旧キー `phygame_logs_refraction`、`phygame_logs_wave`、`phygame_logs` が残っている場合は、初回接続時にサーバーへ移行する。
   - ログエントリには実行 ID、日時、`n1`（または振幅）、`n2`（または速度）、`theta1`（または周波数）、`theta2`（または粘度）、`isTIR`、`type`、`quizStatus`、`fixedOk`、`hasObstacles` を含む。
   - `type` は `'normal'`（屈折通常実行）、`'quiz'`（クイズ回答）、`'wave'`（水面波実行）の 3 種類。
+  - `refresh()`、`add(params, result)`、`clear(category)` はサーバー API と通信するため非同期処理。
   - `add(params, result)` は `params` の各フィールドを優先的にマッピングし、なければ `amplitude` / `speed` / `frequency` / `viscosity` を代入する。
   - CSV 出力では列ヘッダーを `n1/振幅`・`n2/速さ`・`入射角/周波数`・`屈折角/粘度` と表記し、カテゴリ別に出力できる。
   - CSV ファイルには BOM `\uFEFF` を付与して日本語の文字化けを防ぐ。
@@ -107,6 +110,9 @@
 - `server.js`
   - Node.js 標準 `http` / `fs` / `path` による静的ファイルサーバー。
   - ルート `/` は `index.html` を返す。
+  - `/api/logs` でログの取得、追加、削除を行う。
+  - `/api/logs/import` で旧 `localStorage` ログのサーバー移行を受け付ける。
+  - ログ保存ファイル `data/logs.json` を読み書きし、カテゴリごとに最大 100 件へ丸める。
   - MIME type と `Cache-Control: no-cache` を設定する。
   - パストラバーサル対策として `__dirname` 配下のファイルだけ返す。
 
@@ -146,13 +152,16 @@ u[i][j][t+1] = (2*u[i][j][t] - u[i][j][t-1] + c²*(隣接4セルの和 - 4*u[i][
 
 - 実行ボタン押下またはクイズ回答判定ごとにログを 1 件追加する。
 - ログは最新順に表示する.
-- 保存件数は `localStorage` 側で各カテゴリ最大 100 件を想定する。
+- 保存場所はサーバー側の `data/logs.json` とする。
+- 同じサーバーへ接続している別アカウント・別ブラウザでも、同じ保存済みログを参照できる。
+- 保存件数はカテゴリごとに最大 100 件を想定する。
 - 表示は最新 50 件程度に抑える設計になっている。
 - CSV ファイル名は `phygame_log_refraction_YYYYMMDD_HHMM.csv` または `phygame_log_wave_YYYYMMDD_HHMM.csv` 形式。
 - CSV の文字化け対策として BOM `\uFEFF` を付与する。
 - ログの保存先はカテゴリ別に分離する:
-  - `'refraction'` (キー: `phygame_logs_refraction`): 屈折シミュレーション通常実行 (`type: 'normal'`)、クイズ回答判定 (`type: 'quiz'`)
-  - `'wave'` (キー: `phygame_logs_wave`): 水面波シミュレーション実行 (`type: 'wave'`)
+  - `'refraction'`: 屈折シミュレーション通常実行 (`type: 'normal'`)、クイズ回答判定 (`type: 'quiz'`)
+  - `'wave'`: 水面波シミュレーション実行 (`type: 'wave'`)
+- サーバーへ接続できない場合は、画面操作を止めないため一時的に `localStorage` へ保存する。ただし、別アカウント共有の対象はサーバー保存されたログのみ。
 
 ## クイズ機能の仕様
 
@@ -188,7 +197,9 @@ u[i][j][t+1] = (2*u[i][j][t] - u[i][j][t-1] + c²*(隣接4セルの和 - 4*u[i][
 - `wave_simulation.js` の差分法パラメータ `c_sq = c * c * 0.5` は数値安定性のための設定値であり、変更する場合は発散しないことを確認する。
 - クイズ判定は `quiz.js` の光線と的の距離計算に依存する。正答候補との数値比較を判定条件として復活させない。
 - 固定条件つきクイズでは、固定値から外れている回答を正解にしない。
-- `localStorage` のキー `phygame_logs_refraction` および `phygame_logs_wave` を変更すると既存ログが復元できなくなるため、変更する場合は移行処理を検討する。
+- ログ API のレスポンス形式を変更する場合は、`logger.js` と `server.js` の両方を更新する。
+- `data/logs.json` は実行時データであり、テストで作成した不要なログを残さない。
+- 旧 `localStorage` キーを変更する場合は、既存ログ移行処理への影響を確認する。
 - サーバーは標準モジュールだけで動く設計なので、単純な静的配信のために Express などを追加しない。
 - 日本語テキストを編集したファイルは UTF-8 として保存する。
 
@@ -200,6 +211,8 @@ u[i][j][t+1] = (2*u[i][j][t] - u[i][j][t-1] + c²*(隣接4セルの和 - 4*u[i][
 - `http://localhost:3000` で画面が表示される。
 - 各モード切り替えタブ（「光の屈折」「水面波」「ログ」）が正しく機能する。
 - ログクリアと CSV エクスポートが動く。
+- 別ブラウザや別アカウントで同じサーバーに接続しても、保存済みログが表示される。
+- `/api/logs` がログ一覧を返し、ログ追加時に `data/logs.json` へサーバー側ログが保存される。
 - UI 文字列を変更した場合、文字化けやレイアウト崩れがない。
 
 ### 光の屈折モード

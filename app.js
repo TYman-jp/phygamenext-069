@@ -3,7 +3,7 @@
  * アプリケーションコントローラー (光の屈折 / 水面波 / ログ 3モード対応)
  */
 
-(function () {
+(async function () {
   // ── 初期化 ──
   const sim = new RefractionSimulation('simCanvas');
   const waveSim = new WaveSimulation('simCanvas');
@@ -112,7 +112,7 @@
     waveSim.run();
   });
 
-  tabLog.addEventListener('click', () => {
+  tabLog.addEventListener('click', async () => {
     if (currentMode === 'log') return;
     currentMode = 'log';
     tabLog.classList.add('active');
@@ -126,7 +126,8 @@
     // 水面波ループは表示されていない間は停止しておく
     waveSim.stop();
 
-    // 最新のログ内容を再描画
+    // 最新のログ内容をサーバーから取得して再描画
+    await logger.refresh();
     renderRefractionLogs();
     renderWaveLogs();
   });
@@ -335,7 +336,7 @@
   }
 
   // ── 実行ボタン ──
-  runBtn.addEventListener('click', () => {
+  runBtn.addEventListener('click', async () => {
     if (currentMode === 'refraction') {
       const params = getParams();
       const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
@@ -349,7 +350,7 @@
       updateFormulaPreview();
 
       // ログ記録 (屈折系ログへ)
-      logger.add(params, { theta2, isTIR });
+      await logger.add(params, { theta2, isTIR });
       renderRefractionLogs();
     } else if (currentMode === 'wave') {
       // 水面波モード
@@ -359,7 +360,7 @@
       waveSim.clear();
 
       // ログ記録 (タイプ: 'wave', 障害物の有無を含める)
-      logger.add(params, {
+      await logger.add(params, {
         type: 'wave',
         hasObstacles: waveSim.hasObstacles()
       });
@@ -462,10 +463,10 @@
   }
 
   // ── 屈折系ログ: クリア / CSV エクスポート ──
-  clearRefractionLog.addEventListener('click', () => {
+  clearRefractionLog.addEventListener('click', async () => {
     if (logger.refractionLogs.length === 0) return;
     if (!confirm('光の屈折ログ（通常・クイズ）を全件削除しますか？')) return;
-    logger.clear('refraction');
+    await logger.clear('refraction');
     renderRefractionLogs();
   });
 
@@ -475,10 +476,10 @@
   });
 
   // ── 水面波ログ: クリア / CSV エクスポート ──
-  clearWaveLog.addEventListener('click', () => {
+  clearWaveLog.addEventListener('click', async () => {
     if (logger.waveLogs.length === 0) return;
     if (!confirm('水面波ログを全件削除しますか？')) return;
-    logger.clear('wave');
+    await logger.clear('wave');
     renderWaveLogs();
   });
 
@@ -516,7 +517,7 @@
     previewDraw();
   });
 
-  checkQuizBtn.addEventListener('click', () => {
+  checkQuizBtn.addEventListener('click', async () => {
     const params = getParams();
     const result = quiz.evaluate(params);
     const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
@@ -528,7 +529,7 @@
     quizState.className = `quiz-state mono ${result.status === 'correct' ? 'is-correct' : 'is-miss'}`;
 
     // ログ記録 (屈折系ログへ)
-    logger.add(params, {
+    await logger.add(params, {
       theta2: isTIR ? null : theta2,
       isTIR,
       type: 'quiz',
@@ -566,6 +567,7 @@
   }
 
   // ── 起動 ──
+  await logger.ready;
   updateFormulaPreview();
   previewDraw();
   renderRefractionLogs();

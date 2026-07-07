@@ -2,10 +2,9 @@
  * logger.js
  * シミュレーション実行ログ管理
  *
- * 「光の屈折」系(通常・クイズ)と「水面波」系のログは見やすさのため
- * localStorage 上で別々のキーに分離して保存する。
- *   - phygame_logs_refraction : type が 'normal' / 'quiz' のログ
- *   - phygame_logs_wave       : type が 'wave' のログ
+ * ログはサーバー側の data/logs.json に保存する。
+ * これにより、同じサーバーへ別アカウントや別ブラウザから接続しても
+ * 共通のログを参照できる。
  */
 
 class SimulationLogger {
@@ -13,20 +12,15 @@ class SimulationLogger {
     this.storageKeys = {
       refraction: 'phygame_logs_refraction',
       wave: 'phygame_logs_wave',
+      legacy: 'phygame_logs',
+      migrated: 'phygame_logs_server_migrated',
     };
 
-    const refractionData = this._loadFromStorage(this.storageKeys.refraction);
-    const waveData = this._loadFromStorage(this.storageKeys.wave);
-
-    this.refractionLogs = refractionData.logs;
-    this.waveLogs = waveData.logs;
-
-    // 通し番号(#)はカテゴリ間で共有し、これまで通り増分させる
-    this.runCount = Math.max(refractionData.runCount, waveData.runCount);
-
-    // 後方互換: 旧キー `phygame_logs` (屈折/クイズ/水面波が混在)が残っている場合は
-    // 一度だけ種別ごとに振り分けて移行する。
-    this._migrateLegacyLogs();
+    this.refractionLogs = [];
+    this.waveLogs = [];
+    this.runCount = 0;
+    this.serverAvailable = true;
+    this.ready = this.refresh().then(() => this._migrateLocalLogsToServer());
   }
 
   /** type ('normal' | 'quiz' | 'wave') からカテゴリキーを判定 */
@@ -49,14 +43,25 @@ class SimulationLogger {
     return this.refractionLogs;
   }
 
-  /** ログエントリを追加し、種別に応じたカテゴリへ保存 */
-  add(params, result) {
-    const type = result.type || 'normal'; // 'normal', 'quiz', または 'wave'
-    const category = this._categoryFor(type);
+  /** サーバーからログを再取得 */
+  async refresh() {
+    try {
+      const res = await fetch('/api/logs', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      this._applyServerData(data);
+      this.serverAvailable = true;
+    } catch (e) {
+      this.serverAvailable = false;
+      this._loadFallbackFromStorage();
+    }
+  }
 
+  /** ログエントリを追加し、種別に応じたカテゴリへ保存 */
+  async add(params, result) {
+    const type = result.type || 'normal';
     const entry = {
-      id: ++this.runCount,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
       n1: params.n1 !== undefined ? params.n1 : (params.amplitude || 0),
       n2: params.n2 !== undefined ? params.n2 : (params.speed || 0),
       theta1: params.theta1 !== undefined ? params.theta1 : (params.frequency || 0),
@@ -65,12 +70,27 @@ class SimulationLogger {
       type,
       quizStatus: result.quizStatus || null,
       fixedOk: result.fixedOk !== undefined ? result.fixedOk : true,
-      hasObstacles: result.hasObstacles || false
+      hasObstacles: result.hasObstacles || false,
     };
 
-    this._logsFor(category).unshift(entry); // 最新を先頭に
-    this._saveToStorage(category);
-    return entry;
+    if (!this.serverAvailable) {
+      return this._addLocalFallback(entry);
+    }
+
+    try {
+      const res = await fetch('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entry }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      this._applyServerData(data);
+      return this._normalizeEntry(data.entry);
+    } catch (e) {
+      this.serverAvailable = false;
+      return this._addLocalFallback(entry);
+    }
   }
 
   /**
@@ -78,22 +98,21 @@ class SimulationLogger {
    * category を指定しない場合は両カテゴリとも全クリアする。
    * category に 'refraction' または 'wave' を指定すると、そのカテゴリのみクリアする。
    */
-  clear(category) {
-    if (!category) {
-      this.refractionLogs = [];
-      this.waveLogs = [];
-      this.runCount = 0;
-      localStorage.removeItem(this.storageKeys.refraction);
-      localStorage.removeItem(this.storageKeys.wave);
-      localStorage.removeItem('phygame_logs'); // 旧キーも掃除
+  async clear(category) {
+    if (!this.serverAvailable) {
+      this._clearLocalFallback(category);
       return;
     }
-    if (category === 'wave') {
-      this.waveLogs = [];
-      localStorage.removeItem(this.storageKeys.wave);
-    } else {
-      this.refractionLogs = [];
-      localStorage.removeItem(this.storageKeys.refraction);
+
+    try {
+      const query = category ? `?category=${encodeURIComponent(category)}` : '';
+      const res = await fetch(`/api/logs${query}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      this._applyServerData(data);
+    } catch (e) {
+      this.serverAvailable = false;
+      this._clearLocalFallback(category);
     }
   }
 
@@ -159,67 +178,142 @@ class SimulationLogger {
            `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   }
 
-  /** localStorage に保存（カテゴリごとに最大100件） */
-  _saveToStorage(category) {
-    try {
-      const logs = this._logsFor(category);
-      const key = category === 'wave' ? this.storageKeys.wave : this.storageKeys.refraction;
-      const storable = logs.slice(0, 100).map(e => ({
-        ...e,
-        timestamp: e.timestamp.toISOString()
-      }));
-      localStorage.setItem(key, JSON.stringify({ runCount: this.runCount, logs: storable }));
-    } catch(e) { /* quota exceeded など無視 */ }
+  /** 日時を短縮表示用にフォーマット */
+  formatDateShort(d) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   }
 
-  /** localStorage から指定キーのログを復元 */
-  _loadFromStorage(key) {
+  _applyServerData(data) {
+    this.runCount = data.runCount || 0;
+    this.refractionLogs = (data.refractionLogs || []).map(e => this._normalizeEntry(e));
+    this.waveLogs = (data.waveLogs || []).map(e => this._normalizeEntry(e));
+  }
+
+  _normalizeEntry(entry) {
+    return {
+      id: Number(entry.id || 0),
+      timestamp: entry.timestamp instanceof Date ? entry.timestamp : new Date(entry.timestamp),
+      n1: Number(entry.n1 || 0),
+      n2: Number(entry.n2 || 0),
+      theta1: Number(entry.theta1 || 0),
+      theta2: entry.theta2 === null || entry.theta2 === undefined ? null : Number(entry.theta2),
+      isTIR: Boolean(entry.isTIR),
+      type: entry.type || 'normal',
+      quizStatus: entry.quizStatus || null,
+      fixedOk: entry.fixedOk !== undefined ? Boolean(entry.fixedOk) : true,
+      hasObstacles: Boolean(entry.hasObstacles),
+    };
+  }
+
+  async _migrateLocalLogsToServer() {
+    if (!this.serverAvailable || localStorage.getItem(this.storageKeys.migrated)) return;
+
+    const localLogs = [
+      ...this._readLocalStorageLogs(this.storageKeys.refraction),
+      ...this._readLocalStorageLogs(this.storageKeys.wave),
+      ...this._readLocalStorageLogs(this.storageKeys.legacy),
+    ];
+    if (localLogs.length === 0) {
+      localStorage.setItem(this.storageKeys.migrated, '1');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/logs/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logs: localLogs }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      this._applyServerData(data);
+      localStorage.removeItem(this.storageKeys.refraction);
+      localStorage.removeItem(this.storageKeys.wave);
+      localStorage.removeItem(this.storageKeys.legacy);
+      localStorage.setItem(this.storageKeys.migrated, '1');
+    } catch (e) {
+      this.serverAvailable = false;
+      this._loadFallbackFromStorage();
+    }
+  }
+
+  _readLocalStorageLogs(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const data = JSON.parse(raw);
+      return (data.logs || []).map(e => this._normalizeEntry(e));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  _loadFallbackFromStorage() {
+    const refractionData = this._loadCategoryFallback(this.storageKeys.refraction);
+    const waveData = this._loadCategoryFallback(this.storageKeys.wave);
+    this.refractionLogs = refractionData.logs;
+    this.waveLogs = waveData.logs;
+    this.runCount = Math.max(refractionData.runCount, waveData.runCount);
+  }
+
+  _loadCategoryFallback(key) {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return { runCount: 0, logs: [] };
       const data = JSON.parse(raw);
       return {
         runCount: data.runCount || 0,
-        logs: (data.logs || []).map(e => ({ ...e, timestamp: new Date(e.timestamp) }))
+        logs: (data.logs || []).map(e => this._normalizeEntry(e)),
       };
-    } catch(e) {
+    } catch (e) {
       return { runCount: 0, logs: [] };
     }
   }
 
-  /**
-   * 旧キー `phygame_logs` (種別混在)が存在する場合、
-   * 一度だけ種別ごとの新キーへ振り分けて移行する。
-   */
-  _migrateLegacyLogs() {
-    try {
-      const raw = localStorage.getItem('phygame_logs');
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      const legacyLogs = (data.logs || []).map(e => ({ ...e, timestamp: new Date(e.timestamp) }));
-
-      legacyLogs.forEach(entry => {
-        const category = this._categoryFor(entry.type);
-        const target = this._logsFor(category);
-        // 既に移行済みの同一IDが無ければ追加
-        if (!target.some(existing => existing.id === entry.id)) {
-          target.push(entry);
-        }
-      });
-
-      this.refractionLogs.sort((a, b) => b.id - a.id);
-      this.waveLogs.sort((a, b) => b.id - a.id);
-      this.runCount = Math.max(this.runCount, data.runCount || 0);
-
-      this._saveToStorage('refraction');
-      this._saveToStorage('wave');
-      localStorage.removeItem('phygame_logs');
-    } catch(e) { /* 移行に失敗しても致命的ではないため無視 */ }
+  _addLocalFallback(entry) {
+    const category = this._categoryFor(entry.type);
+    const savedEntry = this._normalizeEntry({
+      ...entry,
+      id: ++this.runCount,
+      timestamp: entry.timestamp || new Date().toISOString(),
+    });
+    this._logsFor(category).unshift(savedEntry);
+    this._saveFallback(category);
+    return savedEntry;
   }
 
-  /** 日時を短縮表示用にフォーマット */
-  formatDateShort(d) {
-    const pad = n => String(n).padStart(2, '0');
-    return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  _clearLocalFallback(category) {
+    if (!category) {
+      this.refractionLogs = [];
+      this.waveLogs = [];
+      this.runCount = 0;
+      localStorage.removeItem(this.storageKeys.refraction);
+      localStorage.removeItem(this.storageKeys.wave);
+      localStorage.removeItem(this.storageKeys.legacy);
+      return;
+    }
+
+    if (category === 'wave') {
+      this.waveLogs = [];
+      localStorage.removeItem(this.storageKeys.wave);
+    } else {
+      this.refractionLogs = [];
+      localStorage.removeItem(this.storageKeys.refraction);
+    }
+  }
+
+  _saveFallback(category) {
+    try {
+      const logs = this._logsFor(category);
+      const key = category === 'wave' ? this.storageKeys.wave : this.storageKeys.refraction;
+      const storable = logs.slice(0, 100).map(e => ({
+        ...e,
+        timestamp: e.timestamp.toISOString(),
+      }));
+      localStorage.setItem(key, JSON.stringify({ runCount: this.runCount, logs: storable }));
+    } catch (e) {
+      // localStorage が使えない場合は画面上のログだけ維持する
+    }
   }
 }
