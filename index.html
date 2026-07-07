@@ -272,10 +272,18 @@
     </div>
   </main>
 
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+      }
+    }
+  </script>
   <script src="simulation.js"></script>
   <script src="wave_simulation.js"></script>
-  <script src="logger.js"></script>
+  <script type="module" src="logger.js"></script>
   <script src="quiz.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

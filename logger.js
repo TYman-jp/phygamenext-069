@@ -1,319 +1,218 @@
 /**
  * logger.js
- * シミュレーション実行ログ管理
+ * シミュレーション実行ログ管理 (Firebase Firestore 版)
  *
- * ログはサーバー側の data/logs.json に保存する。
- * これにより、同じサーバーへ別アカウントや別ブラウザから接続しても
- * 共通のログを参照できる。
+ * ログは Firebase Firestore に JSON 形式で保存される。
+ *   - コレクション `refractionLogs` : type が 'normal' / 'quiz' のログ
+ *   - コレクション `waveLogs`       : type が 'wave' のログ
  */
+
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, writeBatch } from "firebase/firestore";
+
+// ==========================================
+// 【Firebase 設定】
+// Firebaseコンソールでプロジェクトを作成し、Webアプリを追加して
+// 表示された設定値をここに貼り付けてください。
+// ==========================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBBvqZcJUQ3jndAdTA-4MVXSZhz2U8iCts",
+  authDomain: "phygamenext.firebaseapp.com",
+  projectId: "phygamenext",
+  storageBucket: "phygamenext.firebasestorage.app",
+  messagingSenderId: "998076125958",
+  appId: "1:998076125958:web:7a020ae6e6387c51f94487",
+  measurementId: "G-2F1DVQ09M8"
+};
+
+// ダミー設定かどうかの判定
+const isDummyConfig = firebaseConfig.apiKey === "YOUR_API_KEY";
+
+// Firebase 初期化
+let db = null;
+if (!isDummyConfig) {
+  try {
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+  } catch (e) {
+    console.error("Firebaseの初期化に失敗しました:", e);
+  }
+}
 
 class SimulationLogger {
   constructor() {
-    this.storageKeys = {
-      refraction: 'phygame_logs_refraction',
-      wave: 'phygame_logs_wave',
-      legacy: 'phygame_logs',
-      migrated: 'phygame_logs_server_migrated',
-    };
-
     this.refractionLogs = [];
     this.waveLogs = [];
-    this.runCount = 0;
-    this.serverAvailable = true;
-    this.ready = this.refresh().then(() => this._migrateLocalLogsToServer());
+    this.runCount = 0; // 今回のセッションでの実行回数ベース（ID用）
+    
+    // アプリ起動時にFirestoreから最新のログを取得
+    this.ready = this.refresh();
   }
 
-  /** type ('normal' | 'quiz' | 'wave') からカテゴリキーを判定 */
-  _categoryFor(type) {
-    return type === 'wave' ? 'wave' : 'refraction';
-  }
-
-  /** 指定カテゴリのログ配列を取得 ('refraction' | 'wave') */
-  _logsFor(category) {
-    return category === 'wave' ? this.waveLogs : this.refractionLogs;
-  }
-
-  /** 現在保存されている全ログ件数 (屈折系 + 水面波系) */
-  get totalCount() {
-    return this.refractionLogs.length + this.waveLogs.length;
-  }
-
-  /** 後方互換のため、屈折系ログを `logs` としても参照可能にする */
-  get logs() {
-    return this.refractionLogs;
-  }
-
-  /** サーバーからログを再取得 */
+  // ── サーバー(Firestore)からログをロード ──
   async refresh() {
+    if (!db) {
+      console.warn("Firebaseが設定されていないため、ログ機能はオフラインモードで動作します。");
+      return;
+    }
     try {
-      const res = await fetch('/api/logs', { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      this._applyServerData(data);
-      this.serverAvailable = true;
+      // refractionLogs
+      const rRef = collection(db, "refractionLogs");
+      const rSnap = await getDocs(query(rRef, orderBy("timestamp", "desc"), limit(100)));
+      this.refractionLogs = rSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), timestamp: doc.data().timestamp.toDate() }));
+
+      // waveLogs
+      const wRef = collection(db, "waveLogs");
+      const wSnap = await getDocs(query(wRef, orderBy("timestamp", "desc"), limit(100)));
+      this.waveLogs = wSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), timestamp: doc.data().timestamp.toDate() }));
+      
+      this._updateRunCount();
     } catch (e) {
-      this.serverAvailable = false;
-      this._loadFallbackFromStorage();
+      console.error('ログのロードに失敗:', e);
     }
   }
 
-  /** ログエントリを追加し、種別に応じたカテゴリへ保存 */
+  _updateRunCount() {
+    let maxId = 0;
+    const all = [...this.refractionLogs, ...this.waveLogs];
+    all.forEach(log => {
+      if (typeof log.localId === 'number' && log.localId > maxId) maxId = log.localId;
+    });
+    this.runCount = maxId;
+  }
+
+  // ── カテゴリ判定 ──
+  _categoryFor(type) { return type === 'wave' ? 'wave' : 'refraction'; }
+  _logsFor(cat) { return cat === 'wave' ? this.waveLogs : this.refractionLogs; }
+
+  // ── ログ追加 (非同期) ──
   async add(params, result) {
     const type = result.type || 'normal';
+    const cat  = this._categoryFor(type);
+    
+    this.runCount++;
+    const now = new Date();
+
     const entry = {
-      timestamp: new Date().toISOString(),
-      n1: params.n1 !== undefined ? params.n1 : (params.amplitude || 0),
-      n2: params.n2 !== undefined ? params.n2 : (params.speed || 0),
+      localId: this.runCount,
+      timestamp: now,
+      n1:    params.n1    !== undefined ? params.n1    : (params.amplitude || 0),
+      n2:    params.n2    !== undefined ? params.n2    : (params.speed     || 0),
       theta1: params.theta1 !== undefined ? params.theta1 : (params.frequency || 0),
       theta2: result.isTIR ? null : (result.theta2 !== undefined ? result.theta2 : (params.viscosity || null)),
       isTIR: result.isTIR || false,
       type,
-      quizStatus: result.quizStatus || null,
-      fixedOk: result.fixedOk !== undefined ? result.fixedOk : true,
+      quizStatus:   result.quizStatus || null,
+      fixedOk:      result.fixedOk !== undefined ? result.fixedOk : true,
       hasObstacles: result.hasObstacles || false,
     };
 
-    if (!this.serverAvailable) {
-      return this._addLocalFallback(entry);
+    if (db) {
+      try {
+        const colName = cat === 'wave' ? "waveLogs" : "refractionLogs";
+        const docRef = await addDoc(collection(db, colName), entry);
+        const finalEntry = { id: docRef.id, ...entry };
+        
+        // ローカル配列の先頭に追加
+        if (cat === 'wave') {
+          this.waveLogs.unshift(finalEntry);
+          if (this.waveLogs.length > 100) this.waveLogs = this.waveLogs.slice(0, 100);
+        } else {
+          this.refractionLogs.unshift(finalEntry);
+          if (this.refractionLogs.length > 100) this.refractionLogs = this.refractionLogs.slice(0, 100);
+        }
+        return finalEntry;
+      } catch (e) {
+        console.error('ログの追加に失敗:', e);
+      }
+    } else {
+      // ダミー時のローカル挙動
+      entry.id = 'dummy_' + this.runCount;
+      if (cat === 'wave') this.waveLogs.unshift(entry); else this.refractionLogs.unshift(entry);
+      return entry;
     }
-
-    try {
-      const res = await fetch('/api/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entry }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      this._applyServerData(data);
-      return this._normalizeEntry(data.entry);
-    } catch (e) {
-      this.serverAvailable = false;
-      return this._addLocalFallback(entry);
-    }
+    return null;
   }
 
-  /**
-   * ログをクリアする。
-   * category を指定しない場合は両カテゴリとも全クリアする。
-   * category に 'refraction' または 'wave' を指定すると、そのカテゴリのみクリアする。
-   */
+  // ── ログクリア (非同期) ──
   async clear(category) {
-    if (!this.serverAvailable) {
-      this._clearLocalFallback(category);
+    if (!db) {
+      if (!category) { this.refractionLogs = []; this.waveLogs = []; }
+      else if (category === 'wave') this.waveLogs = []; 
+      else this.refractionLogs = [];
       return;
     }
 
     try {
-      const query = category ? `?category=${encodeURIComponent(category)}` : '';
-      const res = await fetch(`/api/logs${query}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      this._applyServerData(data);
+      const batch = writeBatch(db);
+      
+      const deleteCollection = async (colName) => {
+        const snap = await getDocs(collection(db, colName));
+        snap.docs.forEach(doc => { batch.delete(doc.ref); });
+      };
+
+      if (!category) {
+        await deleteCollection("refractionLogs");
+        await deleteCollection("waveLogs");
+        await batch.commit();
+        this.refractionLogs = [];
+        this.waveLogs = [];
+        this.runCount = 0;
+      } else {
+        const colName = category === 'wave' ? "waveLogs" : "refractionLogs";
+        await deleteCollection(colName);
+        await batch.commit();
+        if (category === 'wave') this.waveLogs = []; else this.refractionLogs = [];
+      }
     } catch (e) {
-      this.serverAvailable = false;
-      this._clearLocalFallback(category);
+      console.error('ログのクリアに失敗:', e);
     }
   }
 
-  /**
-   * CSV エクスポート。
-   * category を指定すると ('refraction' | 'wave')、そのカテゴリのログのみを出力する。
-   * 指定しない場合は屈折系・水面波系を結合して出力する(後方互換)。
-   */
+  // ── CSV 出力 ──
   toCSV(category) {
-    const headers = ['#', '実行日時', 'タイプ', 'n1/振幅', 'n2/速さ', '入射角/周波数', '屈折角/粘度', '結果'];
-
-    const sourceLogs = category
+    const headers = ['#','実行日時','タイプ','n1/振幅','n2/速さ','入射角/周波数','屈折角/粘度','結果'];
+    const src = category
       ? this._logsFor(category)
-      : [...this.refractionLogs, ...this.waveLogs].sort((a, b) => b.id - a.id);
+      : [...this.refractionLogs, ...this.waveLogs].sort((a, b) => b.localId - a.localId);
 
-    const rows = sourceLogs.map(e => {
-      let typeText = '通常';
-      if (e.type === 'quiz') typeText = 'クイズ';
-      if (e.type === 'wave') typeText = '水面波';
+    const rows = src.map(e => {
+      let tp = '通常';
+      if (e.type === 'quiz') tp = 'クイズ';
+      if (e.type === 'wave') tp = '水面波';
 
-      let resultText = '';
+      let rs = '';
       if (e.type === 'wave') {
-        resultText = e.hasObstacles ? '障害物あり' : '障害物なし';
+        rs = e.hasObstacles ? '障害物あり' : '障害物なし';
       } else if (e.type === 'quiz') {
-        if (e.fixedOk === false) {
-          resultText = 'ルール違反';
-        } else {
-          resultText = e.quizStatus === 'correct' ? '正解' : '不正解';
-        }
-        if (e.isTIR) {
-          resultText += '(全反射)';
-        }
+        rs = e.fixedOk === false ? 'ルール違反' : (e.quizStatus === 'correct' ? '正解' : '不正解');
+        if (e.isTIR) rs += '(全反射)';
       } else {
-        resultText = e.isTIR ? '全反射' : '屈折';
+        rs = e.isTIR ? '全反射' : '屈折';
       }
 
-      const theta2Val = (e.type === 'wave')
+      const t2 = e.type === 'wave'
         ? (e.theta2 ? e.theta2.toFixed(3) : '—')
-        : (e.isTIR ? '—' : (e.theta2 ? e.theta2.toFixed(2) : '0.00'));
+        : (e.isTIR  ? '—' : (e.theta2 ? e.theta2.toFixed(2) : '0.00'));
+      const t1 = e.type === 'wave' ? e.theta1.toFixed(1)+'Hz' : e.theta1.toFixed(1)+'°';
 
-      const theta1Val = (e.type === 'wave')
-        ? e.theta1.toFixed(1) + 'Hz'
-        : e.theta1.toFixed(1) + '°';
-
-      return [
-        e.id,
-        this._formatDate(e.timestamp),
-        typeText,
-        e.n1.toFixed(2),
-        e.n2.toFixed(2),
-        theta1Val,
-        theta2Val,
-        resultText
-      ];
+      return [e.localId || e.id, this._formatDate(e.timestamp), tp, e.n1.toFixed(2), e.n2.toFixed(2), t1, t2, rs];
     });
     return [headers, ...rows].map(r => r.join(',')).join('\n');
   }
 
-  /** 日時フォーマット */
   _formatDate(d) {
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ` +
-           `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    if (!d) return '';
+    const p = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   }
 
-  /** 日時を短縮表示用にフォーマット */
   formatDateShort(d) {
-    const pad = n => String(n).padStart(2, '0');
-    return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  }
-
-  _applyServerData(data) {
-    this.runCount = data.runCount || 0;
-    this.refractionLogs = (data.refractionLogs || []).map(e => this._normalizeEntry(e));
-    this.waveLogs = (data.waveLogs || []).map(e => this._normalizeEntry(e));
-  }
-
-  _normalizeEntry(entry) {
-    return {
-      id: Number(entry.id || 0),
-      timestamp: entry.timestamp instanceof Date ? entry.timestamp : new Date(entry.timestamp),
-      n1: Number(entry.n1 || 0),
-      n2: Number(entry.n2 || 0),
-      theta1: Number(entry.theta1 || 0),
-      theta2: entry.theta2 === null || entry.theta2 === undefined ? null : Number(entry.theta2),
-      isTIR: Boolean(entry.isTIR),
-      type: entry.type || 'normal',
-      quizStatus: entry.quizStatus || null,
-      fixedOk: entry.fixedOk !== undefined ? Boolean(entry.fixedOk) : true,
-      hasObstacles: Boolean(entry.hasObstacles),
-    };
-  }
-
-  async _migrateLocalLogsToServer() {
-    if (!this.serverAvailable || localStorage.getItem(this.storageKeys.migrated)) return;
-
-    const localLogs = [
-      ...this._readLocalStorageLogs(this.storageKeys.refraction),
-      ...this._readLocalStorageLogs(this.storageKeys.wave),
-      ...this._readLocalStorageLogs(this.storageKeys.legacy),
-    ];
-    if (localLogs.length === 0) {
-      localStorage.setItem(this.storageKeys.migrated, '1');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/logs/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ logs: localLogs }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      this._applyServerData(data);
-      localStorage.removeItem(this.storageKeys.refraction);
-      localStorage.removeItem(this.storageKeys.wave);
-      localStorage.removeItem(this.storageKeys.legacy);
-      localStorage.setItem(this.storageKeys.migrated, '1');
-    } catch (e) {
-      this.serverAvailable = false;
-      this._loadFallbackFromStorage();
-    }
-  }
-
-  _readLocalStorageLogs(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return [];
-      const data = JSON.parse(raw);
-      return (data.logs || []).map(e => this._normalizeEntry(e));
-    } catch (e) {
-      return [];
-    }
-  }
-
-  _loadFallbackFromStorage() {
-    const refractionData = this._loadCategoryFallback(this.storageKeys.refraction);
-    const waveData = this._loadCategoryFallback(this.storageKeys.wave);
-    this.refractionLogs = refractionData.logs;
-    this.waveLogs = waveData.logs;
-    this.runCount = Math.max(refractionData.runCount, waveData.runCount);
-  }
-
-  _loadCategoryFallback(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return { runCount: 0, logs: [] };
-      const data = JSON.parse(raw);
-      return {
-        runCount: data.runCount || 0,
-        logs: (data.logs || []).map(e => this._normalizeEntry(e)),
-      };
-    } catch (e) {
-      return { runCount: 0, logs: [] };
-    }
-  }
-
-  _addLocalFallback(entry) {
-    const category = this._categoryFor(entry.type);
-    const savedEntry = this._normalizeEntry({
-      ...entry,
-      id: ++this.runCount,
-      timestamp: entry.timestamp || new Date().toISOString(),
-    });
-    this._logsFor(category).unshift(savedEntry);
-    this._saveFallback(category);
-    return savedEntry;
-  }
-
-  _clearLocalFallback(category) {
-    if (!category) {
-      this.refractionLogs = [];
-      this.waveLogs = [];
-      this.runCount = 0;
-      localStorage.removeItem(this.storageKeys.refraction);
-      localStorage.removeItem(this.storageKeys.wave);
-      localStorage.removeItem(this.storageKeys.legacy);
-      return;
-    }
-
-    if (category === 'wave') {
-      this.waveLogs = [];
-      localStorage.removeItem(this.storageKeys.wave);
-    } else {
-      this.refractionLogs = [];
-      localStorage.removeItem(this.storageKeys.refraction);
-    }
-  }
-
-  _saveFallback(category) {
-    try {
-      const logs = this._logsFor(category);
-      const key = category === 'wave' ? this.storageKeys.wave : this.storageKeys.refraction;
-      const storable = logs.slice(0, 100).map(e => ({
-        ...e,
-        timestamp: e.timestamp.toISOString(),
-      }));
-      localStorage.setItem(key, JSON.stringify({ runCount: this.runCount, logs: storable }));
-    } catch (e) {
-      // localStorage が使えない場合は画面上のログだけ維持する
-    }
+    if (!d) return '';
+    const p = n => String(n).padStart(2,'0');
+    return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   }
 }
+
+// 他のスクリプト（app.jsなど）から参照できるようにグローバルへ公開
+window.SimulationLogger = SimulationLogger;
