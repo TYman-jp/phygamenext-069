@@ -3,7 +3,7 @@
  * アプリケーションコントローラー (光の屈折 / 水面波 / ログ 3モード対応)
  */
 
-(async function () {
+(function () {
   // ── 初期化 ──
   const sim = new RefractionSimulation('simCanvas');
   const waveSim = new WaveSimulation('simCanvas');
@@ -335,7 +335,7 @@
   }
 
   // ── 実行ボタン ──
-  runBtn.addEventListener('click', async () => {
+  runBtn.addEventListener('click', () => {
     if (currentMode === 'refraction') {
       const params = getParams();
       const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
@@ -348,8 +348,8 @@
       tirWarning.classList.toggle('hidden', !isTIR);
       updateFormulaPreview();
 
-      // ログ記録 (屈折系ログへ - 非同期)
-      await logger.add(params, { theta2, isTIR });
+      // ログ記録 (屈折系ログへ)
+      logger.add(params, { theta2, isTIR });
       renderRefractionLogs();
     } else if (currentMode === 'wave') {
       // 水面波モード
@@ -358,8 +358,8 @@
       // シミュレーションの状態を一度クリアして再スタートさせる
       waveSim.clear();
 
-      // ログ記録 (タイプ: 'wave', 障害物の有無を含める - 非同期)
-      await logger.add(params, {
+      // ログ記録 (タイプ: 'wave', 障害物の有無を含める)
+      logger.add(params, {
         type: 'wave',
         hasObstacles: waveSim.hasObstacles()
       });
@@ -462,10 +462,10 @@
   }
 
   // ── 屈折系ログ: クリア / CSV エクスポート ──
-  clearRefractionLog.addEventListener('click', async () => {
+  clearRefractionLog.addEventListener('click', () => {
     if (logger.refractionLogs.length === 0) return;
     if (!confirm('光の屈折ログ（通常・クイズ）を全件削除しますか？')) return;
-    await logger.clear('refraction');
+    logger.clear('refraction');
     renderRefractionLogs();
   });
 
@@ -475,10 +475,10 @@
   });
 
   // ── 水面波ログ: クリア / CSV エクスポート ──
-  clearWaveLog.addEventListener('click', async () => {
+  clearWaveLog.addEventListener('click', () => {
     if (logger.waveLogs.length === 0) return;
     if (!confirm('水面波ログを全件削除しますか？')) return;
-    await logger.clear('wave');
+    logger.clear('wave');
     renderWaveLogs();
   });
 
@@ -516,7 +516,7 @@
     previewDraw();
   });
 
-  checkQuizBtn.addEventListener('click', async () => {
+  checkQuizBtn.addEventListener('click', () => {
     const params = getParams();
     const result = quiz.evaluate(params);
     const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
@@ -527,8 +527,8 @@
     quizState.textContent = result.status === 'correct' ? '正解' : '判定済み';
     quizState.className = `quiz-state mono ${result.status === 'correct' ? 'is-correct' : 'is-miss'}`;
 
-    // ログ記録 (屈折系ログへ - 非同期)
-    await logger.add(params, {
+    // ログ記録 (屈折系ログへ)
+    logger.add(params, {
       theta2: isTIR ? null : theta2,
       isTIR,
       type: 'quiz',
@@ -566,7 +566,6 @@
   }
 
   // ── 起動 ──
-  await logger.load();
   updateFormulaPreview();
   previewDraw();
   renderRefractionLogs();
