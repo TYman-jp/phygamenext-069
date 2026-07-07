@@ -61,13 +61,11 @@
   // UI要素 (ログタブ — 屈折系)
   const refractionLogBody  = document.getElementById('refractionLogBody');
   const refractionLogCount = document.getElementById('refractionLogCount');
-  const clearRefractionLog = document.getElementById('clearRefractionLog');
   const exportRefractionLog = document.getElementById('exportRefractionLog');
 
   // UI要素 (ログタブ — 水面波系)
   const waveLogBody  = document.getElementById('waveLogBody');
   const waveLogCount = document.getElementById('waveLogCount');
-  const clearWaveLog = document.getElementById('clearWaveLog');
   const exportWaveLog = document.getElementById('exportWaveLog');
 
   // UI要素 (名前モーダル)
@@ -389,8 +387,6 @@
     let typeHtml = `<span class="log-type-normal">通常</span>`;
     if (isQuiz) {
       typeHtml = `<span class="log-type-quiz">クイズ</span>`;
-    } else if (isWave) {
-      typeHtml = `<span class="log-type-quiz" style="color:var(--ray-ref);">水面波</span>`;
     }
 
     let resultHtml = '';
@@ -470,27 +466,13 @@
     waveLogCount.textContent = `${logs.length} 件`;
   }
 
-  // ── 屈折系ログ: クリア / CSV エクスポート ──
-  clearRefractionLog.addEventListener('click', async () => {
-    if (logger.refractionLogs.length === 0) return;
-    if (!confirm('光の屈折ログ（通常・クイズ）を全件削除しますか？')) return;
-    await logger.clear('refraction');
-    renderRefractionLogs();
-  });
-
+  // ── 屈折系ログ: CSV エクスポート ──
   exportRefractionLog.addEventListener('click', () => {
     if (logger.refractionLogs.length === 0) { alert('エクスポートする屈折ログがありません。'); return; }
     downloadCSV(logger.toCSV('refraction'), 'refraction');
   });
 
-  // ── 水面波ログ: クリア / CSV エクスポート ──
-  clearWaveLog.addEventListener('click', async () => {
-    if (logger.waveLogs.length === 0) return;
-    if (!confirm('水面波ログを全件削除しますか？')) return;
-    await logger.clear('wave');
-    renderWaveLogs();
-  });
-
+  // ── 水面波ログ: CSV エクスポート ──
   exportWaveLog.addEventListener('click', () => {
     if (logger.waveLogs.length === 0) { alert('エクスポートする水面波ログがありません。'); return; }
     downloadCSV(logger.toCSV('wave'), 'wave');
