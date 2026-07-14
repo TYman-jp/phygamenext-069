@@ -137,6 +137,14 @@
               <div class="range-hints"><span>高（どろどろ）</span><span>低（さらさら）</span></div>
             </div>
 
+            <div class="param-block" style="flex-direction: row; align-items: center; justify-content: space-between;">
+              <label class="param-label" style="margin-bottom: 0;">
+                境界条件：<span id="wallReflectionLabel">壁（反射）</span>
+              </label>
+              <input type="checkbox" id="wallReflectionCheck" checked style="accent-color: var(--primary);" aria-label="境界を壁として扱う">
+            </div>
+            <div class="range-hints"><span>オン：枠で反射</span><span>オフ：枠から吸収</span></div>
+
             <div class="preset-row">
               <span class="param-label" style="margin-bottom:8px;display:block;">プリセット / 操作</span>
               <div class="preset-buttons" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">

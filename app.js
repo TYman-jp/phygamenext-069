@@ -55,8 +55,10 @@
   const waveSpeedVal        = document.getElementById('waveSpeedVal');
   const waveFreqVal         = document.getElementById('waveFreqVal');
   const waveViscVal         = document.getElementById('waveViscVal');
+  const wallReflectionLabel = document.getElementById('wallReflectionLabel');
   const toolPenBtn         = document.getElementById('toolPenBtn');
   const toolEraserBtn       = document.getElementById('toolEraserBtn');
+  const wallReflectionCheck = document.getElementById('wallReflectionCheck');
 
   // UI要素 (ログタブ — 屈折系)
   const refractionLogBody  = document.getElementById('refractionLogBody');
@@ -218,12 +220,16 @@
       speed: parseFloat(waveSpeedSlider.value),
       frequency: parseFloat(waveFreqSlider.value),
       viscosity: parseFloat(waveViscSlider.value),
+      wallReflection: wallReflectionCheck ? wallReflectionCheck.checked : true,
     };
   }
 
   function updateWaveParams() {
     const params = getWaveParams();
     waveSim.setParams(params);
+    if (wallReflectionLabel) {
+      wallReflectionLabel.textContent = params.wallReflection ? '壁（反射）' : '開放（吸収）';
+    }
   }
 
   function getViscosityLabel(v) {
@@ -254,6 +260,14 @@
     waveViscVal.textContent = getViscosityLabel(v);
     updateWaveParams();
   });
+
+  if (wallReflectionCheck) {
+    wallReflectionCheck.addEventListener('change', () => {
+      updateWaveParams();
+    });
+  }
+
+  updateWaveParams();
 
   // 初期粘度ラベルの表示
   waveViscVal.textContent = getViscosityLabel(parseFloat(waveViscSlider.value));
