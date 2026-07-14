@@ -21,7 +21,9 @@ class WaveSimulation {
       amplitude: 5.0,    // 振幅
       speed: 0.50,       // 伝播速度 (波動方程式のc)
       frequency: 2.0,   // 周波数 (Hz)
-      viscosity: 0.986,  // 粘度 (減衰係数d)
+      viscosity: 0.998,  // 粘度 (減衰係数d)
+      contrast: 1.5,     // コントラスト
+      wallReflection: true, // 枠を壁扱いするかどうか
     };
 
     // シミュレーション用配列
@@ -73,15 +75,16 @@ class WaveSimulation {
 
   /** 境界付近の減衰率を設定 (吸収境界条件の近似) */
   _initBoundaryDamping() {
-    const border = 6; // 減衰を適用する外周幅
+    const border = 15; // 減衰を適用する外周幅
     for (let y = 0; y < this.rows; y++) {
       for (let x = 0; x < this.cols; x++) {
         const idx = y * this.cols + x;
         let dist = Math.min(x, y, this.cols - 1 - x, this.rows - 1 - y);
         if (dist < border) {
-          // 端に近づくほど減衰を強くする (1.0 -> 0.85)
-          const factor = dist / border;
-          this.boundaryDamping[idx] = 0.85 + factor * 0.15;
+          // 端に近づくほど減衰を強くする (1.0 -> 0.70)
+          // 2次曲線でスムーズに減衰させ、インピーダンスの急変による反射を防ぐ
+          const factor = (border - dist) / border;
+          this.boundaryDamping[idx] = 1.0 - 0.3 * (factor * factor);
         } else {
           this.boundaryDamping[idx] = 1.0;
         }
@@ -124,7 +127,33 @@ class WaveSimulation {
         let val = 2 * u_curr[idx] - u_prev[idx] + c_sq * (neighbors - 4 * u_curr[idx]);
         
         // 液体の粘度 (基本減衰) と 吸収境界条件の減衰を掛け算
-        u_next[idx] = val * damping * boundaryDamping[idx];
+        let bd = this.params.wallReflection === false ? boundaryDamping[idx] : 1.0;
+        u_next[idx] = val * damping * bd;
+      }
+    }
+
+    // 境界の処理
+    if (this.params.wallReflection === false) {
+      for (let x = 0; x < cols; x++) {
+        u_next[x] = u_curr[cols + x];
+        u_next[(rows - 1) * cols + x] = u_curr[(rows - 2) * cols + x];
+      }
+      for (let y = 0; y < rows; y++) {
+        u_next[y * cols] = u_curr[y * cols + 1];
+        u_next[y * cols + cols - 1] = u_curr[y * cols + cols - 2];
+      }
+      u_next[0] = u_curr[cols + 1];
+      u_next[cols - 1] = u_curr[2 * cols - 2];
+      u_next[(rows - 1) * cols] = u_curr[(rows - 2) * cols + 1];
+      u_next[(rows - 1) * cols + cols - 1] = u_curr[(rows - 2) * cols + cols - 2];
+    } else {
+      for (let x = 0; x < cols; x++) {
+        u_next[x] = 0;
+        u_next[(rows - 1) * cols + x] = 0;
+      }
+      for (let y = 0; y < rows; y++) {
+        u_next[y * cols] = 0;
+        u_next[y * cols + cols - 1] = 0;
       }
     }
 
@@ -142,7 +171,9 @@ class WaveSimulation {
     const obstacleColor = { r: 30, g: 58, b: 95 }; // 障害物色 (#1E3A5F)
     
     // 最大変位の基準スケール (描画の色マッピング用)
-    const colorScale = this.params.amplitude * 0.8;
+    // 波の表示の濃さ（コントラスト）スライダーに対応。値が大きいほど colorScale が小さくなり濃く見える。
+    // デフォルトcontrast=1.5の時、0.4 / 1.5 ≈ 0.26 となり以前の濃さを維持
+    const colorScale = this.params.amplitude * (0.4 / (this.params.contrast || 1.5));
 
     for (let i = 0; i < this.gridSize; i++) {
       const px = i * 4;
@@ -158,17 +189,19 @@ class WaveSimulation {
 
       const val = u_curr[i];
       if (val > 0) {
-        // 正の変位: シアン系 (明るい水色)
+        // 正の変位: 明るいシアン〜白系 (視認性を高めた色)
         const intensity = Math.min(1, val / colorScale);
-        data[px]     = Math.floor(baseColor.r + (0 - baseColor.r) * intensity);
-        data[px + 1] = Math.floor(baseColor.g + (212 - baseColor.g) * intensity);
-        data[px + 2] = Math.floor(baseColor.b + (255 - baseColor.b) * intensity);
+        const i2 = intensity * intensity; // ガンマ補正で中間域も明るく
+        data[px]     = Math.floor(baseColor.r + (100 - baseColor.r) * i2);
+        data[px + 1] = Math.floor(baseColor.g + (240 - baseColor.g) * i2);
+        data[px + 2] = Math.floor(baseColor.b + (255 - baseColor.b) * i2);
       } else {
-        // 負の変位: ディープブルー系 (暗い青)
+        // 負の変位: 濃い紺〜紫系 (暗部との差をはっきり)
         const intensity = Math.min(1, -val / colorScale);
-        data[px]     = Math.floor(baseColor.r + (20 - baseColor.r) * intensity);
-        data[px + 1] = Math.floor(baseColor.g + (40 - baseColor.g) * intensity);
-        data[px + 2] = Math.floor(baseColor.b + (180 - baseColor.b) * intensity);
+        const i2 = intensity * intensity;
+        data[px]     = Math.floor(baseColor.r + (40 - baseColor.r) * i2);
+        data[px + 1] = Math.floor(baseColor.g + (20 - baseColor.g) * i2);
+        data[px + 2] = Math.floor(baseColor.b + (200 - baseColor.b) * i2);
       }
       data[px + 3] = 255; // Alpha
     }

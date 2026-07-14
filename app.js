@@ -55,6 +55,8 @@
   const waveSpeedVal        = document.getElementById('waveSpeedVal');
   const waveFreqVal         = document.getElementById('waveFreqVal');
   const waveViscVal         = document.getElementById('waveViscVal');
+  const waveContrastSlider  = document.getElementById('waveContrastSlider');
+  const waveContrastVal     = document.getElementById('waveContrastVal');
   const toolPenBtn         = document.getElementById('toolPenBtn');
   const toolEraserBtn       = document.getElementById('toolEraserBtn');
 
@@ -291,6 +293,8 @@
       speed: parseFloat(waveSpeedSlider.value),
       frequency: parseFloat(waveFreqSlider.value),
       viscosity: parseFloat(waveViscSlider.value),
+      contrast: waveContrastSlider ? parseFloat(waveContrastSlider.value) : 1.5,
+      wallReflection: wallReflectionCheck ? wallReflectionCheck.checked : true,
     };
   }
 
@@ -300,6 +304,7 @@
   }
 
   function getViscosityLabel(v) {
+    if (v >= 1.000) return 'ゼロ (抵抗なし)';
     if (v >= 0.995) return '極低 (さらさら)';
     if (v >= 0.990) return '低';
     if (v >= 0.980) return '普通';
@@ -327,6 +332,19 @@
     waveViscVal.textContent = getViscosityLabel(v);
     updateWaveParams();
   });
+
+  if (waveContrastSlider) {
+    waveContrastSlider.addEventListener('input', () => {
+      waveContrastVal.textContent = parseFloat(waveContrastSlider.value).toFixed(1);
+      updateWaveParams();
+    });
+  }
+
+  if (wallReflectionCheck) {
+    wallReflectionCheck.addEventListener('change', () => {
+      updateWaveParams();
+    });
+  }
 
   // 初期粘度ラベルの表示
   waveViscVal.textContent = getViscosityLabel(parseFloat(waveViscSlider.value));
