@@ -82,7 +82,7 @@ class SimulationLogger {
   }
 
   // ── カテゴリ判定 ──
-  _categoryFor(type) { return type === 'wave' ? 'wave' : 'refraction'; }
+  _categoryFor(type) { return (type === 'wave' || type === 'wave-quiz') ? 'wave' : 'refraction'; }
   _logsFor(cat) { return cat === 'wave' ? this.waveLogs : this.refractionLogs; }
 
   // ── ログ追加 (非同期) ──
@@ -106,6 +106,7 @@ class SimulationLogger {
       quizStatus:   result.quizStatus || null,
       fixedOk:      result.fixedOk !== undefined ? result.fixedOk : true,
       hasObstacles: result.hasObstacles || false,
+      errorDeg:     result.errorDeg !== undefined ? result.errorDeg : null,
     };
 
     if (db) {

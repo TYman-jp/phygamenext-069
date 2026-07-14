@@ -51,6 +51,8 @@ class WaveSimulation {
     this.isAnimating = false;
     this.animFrame = null;
 
+    this.target = null; // クイズ用の的
+
     this.clear();
     this.draw();
   }
@@ -224,6 +226,36 @@ class WaveSimulation {
     ctx.shadowColor = '#00D4FF';
     ctx.fill();
     ctx.restore();
+
+    // 的の描画 (クイズ用)
+    if (this.target) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(this.target.x, this.target.y, this.target.radius || 10, 0, Math.PI * 2);
+      ctx.strokeStyle = '#FF3366';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+
+      // 中心点
+      ctx.beginPath();
+      ctx.arc(this.target.x, this.target.y, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#FF3366';
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /** クイズ用の的を設定 */
+  setTarget(target) {
+    this.target = target;
+    if (!this.isAnimating) this.draw();
+  }
+
+  /** クイズ用の的をクリア */
+  clearTarget() {
+    this.target = null;
+    if (!this.isAnimating) this.draw();
   }
 
   /** 障害物の追加 (Canvas座標からグリッド座標へ変換して描画) */

@@ -32,7 +32,8 @@
   const incidentDisplay  = document.getElementById('incidentDisplay');
   const refractedDisplay = document.getElementById('refractedDisplay');
 
-  // UI要素 (クイズ)
+  // UI要素 (クイズ - 屈折)
+  const quizPanel = document.getElementById('quizPanel');
   const newQuizBtn = document.getElementById('newQuizBtn');
   const checkQuizBtn = document.getElementById('checkQuizBtn');
   const revealQuizBtn = document.getElementById('revealQuizBtn');
@@ -40,6 +41,19 @@
   const quizMaterial = document.getElementById('quizMaterial');
   const quizTarget = document.getElementById('quizTarget');
   const quizFeedback = document.getElementById('quizFeedback');
+
+  // UI要素 (クイズ - 水面波)
+  const waveQuizPanel = document.getElementById('waveQuizPanel');
+  const newWaveQuizBtn = document.getElementById('newWaveQuizBtn');
+  const checkWaveQuizBtn = document.getElementById('checkWaveQuizBtn');
+  const revealWaveQuizBtn = document.getElementById('revealWaveQuizBtn');
+  const waveQuizState = document.getElementById('waveQuizState');
+  const waveQuizCondition = document.getElementById('waveQuizCondition');
+  const waveQuizTarget = document.getElementById('waveQuizTarget');
+  const waveQuizFeedback = document.getElementById('waveQuizFeedback');
+
+  // WaveQuiz インスタンス
+  const waveQuiz = new WaveQuiz(waveSim);
 
   // UI要素 (水面波)
   const tabRefraction      = document.getElementById('tabRefraction');
@@ -153,6 +167,9 @@
 
     simulationView.classList.remove('hidden');
     logView.classList.add('hidden');
+    
+    quizPanel.classList.remove('hidden');
+    waveQuizPanel.classList.add('hidden');
 
     // 水面波のループを停止し、屈折のプレビューを描画
     waveSim.stop();
@@ -172,6 +189,9 @@
 
     simulationView.classList.remove('hidden');
     logView.classList.add('hidden');
+    
+    quizPanel.classList.add('hidden');
+    waveQuizPanel.classList.remove('hidden');
 
     // 屈折シミュレーションの的を非表示にし、水面波パラメータを設定してループ開始
     sim.clearTarget();
@@ -472,8 +492,8 @@
   function buildLogRow(entry) {
     const tr = document.createElement('tr');
 
-    const isQuiz = entry.type === 'quiz';
-    const isWave = entry.type === 'wave';
+    const isQuiz = entry.type === 'quiz' || entry.type === 'wave-quiz';
+    const isWave = entry.type === 'wave' || entry.type === 'wave-quiz';
 
     let typeHtml = `<span class="log-type-normal">通常</span>`;
     if (isQuiz) {
@@ -634,6 +654,50 @@
     if (typeof fixed.n2 === 'number') n2Slider.value = fixed.n2;
     syncParamLabels();
   }
+
+  // ── 水面波クイズ機能 ──
+  newWaveQuizBtn.addEventListener('click', () => {
+    const problem = waveQuiz.generate();
+    waveQuizState.textContent = '出題中';
+    waveQuizState.className = 'quiz-state mono is-active';
+    waveQuizCondition.textContent = problem.conditionText;
+    waveQuizTarget.textContent = `x=${problem.targetGrid.x.toFixed(0)}, y=${problem.targetGrid.y.toFixed(0)}`;
+    waveQuizFeedback.textContent = '波の速さと周波数を計算して調整し、判定してください。';
+    waveQuizFeedback.className = 'quiz-feedback';
+    
+    // スライダー等のパラメータをリセットする処理も必要に応じて追加できます
+    // 今回は波の生成を開始します
+    waveSim.setParams(getWaveParams());
+    waveSim.run();
+  });
+
+  checkWaveQuizBtn.addEventListener('click', async () => {
+    const params = getWaveParams();
+    const result = waveQuiz.evaluate(params);
+
+    waveSim.setParams(params);
+    waveSim.run(); // シミュレーション実行継続
+    
+    waveQuizFeedback.textContent = result.message;
+    waveQuizFeedback.className = `quiz-feedback ${result.status === 'correct' ? 'is-correct' : 'is-miss'}`;
+    waveQuizState.textContent = result.status === 'correct' ? '正解' : '判定済み';
+    waveQuizState.className = `quiz-state mono ${result.status === 'correct' ? 'is-correct' : 'is-miss'}`;
+
+    // ログ記録 (水面波系ログへ type: 'wave-quiz' で追加)
+    await logger.add(params, {
+      type: 'wave-quiz',
+      quizStatus: result.status,
+      errorDeg: result.errorDeg
+    }, currentUserName);
+    renderWaveLogs();
+  });
+
+  revealWaveQuizBtn.addEventListener('click', () => {
+    waveQuizFeedback.textContent = waveQuiz.revealAnswer();
+    waveQuizFeedback.className = 'quiz-feedback is-answer';
+    waveQuizState.textContent = '答え表示';
+    waveQuizState.className = 'quiz-state mono is-answer';
+  });
 
   function syncParamLabels() {
     const angle = parseFloat(angleSlider.value);

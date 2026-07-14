@@ -176,7 +176,7 @@
           </button>
         </section>
 
-        <!-- クイズパネル -->
+        <!-- クイズパネル (屈折) -->
         <section class="quiz-panel" id="quizPanel">
           <div class="quiz-header">
             <div>
@@ -211,6 +211,43 @@
           </div>
 
           <div class="quiz-feedback" id="quizFeedback">Canvas の黄色い的を狙ってください。</div>
+        </section>
+
+        <!-- クイズパネル (水面波) -->
+        <section class="quiz-panel hidden" id="waveQuizPanel">
+          <div class="quiz-header">
+            <div>
+              <div class="section-label">WAVE QUIZ</div>
+              <h2>干渉縞を的に合わせる</h2>
+            </div>
+            <span class="quiz-state mono" id="waveQuizState">未出題</span>
+          </div>
+
+          <div class="quiz-card">
+            <p id="waveQuizPrompt">問題を生成すると的が表示されます。二重スリットを通った波が的の位置で指定された干渉を起こすよう、波の速さと周波数を調整してください。</p>
+            <dl class="quiz-data">
+              <div>
+                <dt>条件</dt>
+                <dd id="waveQuizCondition">—</dd>
+              </div>
+              <div>
+                <dt>的の中心</dt>
+                <dd id="waveQuizTarget">—</dd>
+              </div>
+              <div>
+                <dt>許容誤差</dt>
+                <dd>位相差 ±45°</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="quiz-actions">
+            <button id="newWaveQuizBtn" class="quiz-btn quiz-btn--primary">問題生成</button>
+            <button id="checkWaveQuizBtn" class="quiz-btn">回答判定</button>
+            <button id="revealWaveQuizBtn" class="quiz-btn">答え表示</button>
+          </div>
+
+          <div class="quiz-feedback" id="waveQuizFeedback">波の速さと周波数を計算して調整してください。</div>
         </section>
       </div>
     </div>
@@ -329,6 +366,7 @@
   <script src="wave_simulation.js"></script>
   <script type="module" src="logger.js"></script>
   <script src="quiz.js"></script>
+  <script src="wave_quiz.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
