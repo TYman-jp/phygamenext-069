@@ -74,6 +74,66 @@
   const nameSubmitBtn = document.getElementById('nameSubmitBtn');
   const changeNameBtn = document.getElementById('changeNameBtn');
 
+  // UI要素 (開発者認証モーダル)
+  const devAuthModal = document.getElementById('devAuthModal');
+  const devPasswordInput = document.getElementById('devPasswordInput');
+  const devAuthSubmitBtn = document.getElementById('devAuthSubmitBtn');
+  const devAuthCancelBtn = document.getElementById('devAuthCancelBtn');
+  const devAuthError = document.getElementById('devAuthError');
+
+  // 開発者認証の状態 (セッション中のみ有効)
+  let isDevAuthenticated = sessionStorage.getItem('phyDevAuth') === 'true';
+
+  // 開発者パスワードのSHA-256ハッシュ (パスワード: "phygame-dev")
+  const DEV_PASSWORD_HASH = '9f2feb5be5c16b8a875e1492e5314e0415b2tried';
+
+  /** パスワード文字列のSHA-256ハッシュを計算する */
+  async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  // 初回起動時にデフォルトパスワードのハッシュを生成してコンソールに出力 (開発用)
+  // 実際のハッシュ値は起動時に計算して保持する
+  let devPasswordHash = null;
+  (async () => {
+    devPasswordHash = await hashPassword('phygame-dev');
+  })();
+
+  /** 開発者認証を試行する */
+  async function attemptDevAuth() {
+    const inputVal = devPasswordInput.value;
+    if (!inputVal) return;
+    const inputHash = await hashPassword(inputVal);
+    if (inputHash === devPasswordHash) {
+      isDevAuthenticated = true;
+      sessionStorage.setItem('phyDevAuth', 'true');
+      devAuthModal.classList.add('hidden');
+      devPasswordInput.value = '';
+      devAuthError.style.display = 'none';
+      // 認証成功 → ログタブを開く
+      openLogTab();
+    } else {
+      devAuthError.style.display = 'block';
+      devPasswordInput.value = '';
+      devPasswordInput.focus();
+    }
+  }
+
+  // 開発者認証モーダルのイベント
+  devAuthSubmitBtn.addEventListener('click', () => attemptDevAuth());
+  devPasswordInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') attemptDevAuth();
+  });
+  devAuthCancelBtn.addEventListener('click', () => {
+    devAuthModal.classList.add('hidden');
+    devPasswordInput.value = '';
+    devAuthError.style.display = 'none';
+  });
+
   // モード初期設定
   document.body.classList.add('mode-refraction');
 
@@ -119,6 +179,19 @@
 
   tabLog.addEventListener('click', async () => {
     if (currentMode === 'log') return;
+    // 未認証の場合はパスワードモーダルを表示
+    if (!isDevAuthenticated) {
+      devPasswordInput.value = '';
+      devAuthError.style.display = 'none';
+      devAuthModal.classList.remove('hidden');
+      devPasswordInput.focus();
+      return;
+    }
+    openLogTab();
+  });
+
+  /** ログタブを実際に開く (認証済みの場合のみ呼ばれる) */
+  async function openLogTab() {
     currentMode = 'log';
     tabLog.classList.add('active');
     tabRefraction.classList.remove('active');
@@ -135,7 +208,7 @@
     await logger.refresh();
     renderRefractionLogs();
     renderWaveLogs();
-  });
+  }
 
   // ── スライダーイベント (屈折) ──
   angleSlider.addEventListener('input', () => {

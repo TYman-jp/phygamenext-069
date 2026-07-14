@@ -287,6 +287,20 @@
     </div>
   </div>
 
+  <!-- 開発者パスワード入力モーダル -->
+  <div id="devAuthModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <h2 style="margin-top:0; color:var(--text-light); font-family:var(--font-heading);">🔒 開発者認証</h2>
+      <p style="color:var(--text-muted); font-size:0.95rem; margin-bottom:1.5rem;">ログ閲覧は開発者専用です。パスワードを入力してください。</p>
+      <input type="password" id="devPasswordInput" placeholder="パスワード" class="modal-input" maxlength="50">
+      <p id="devAuthError" style="color:#FF6B6B; font-size:0.85rem; margin-top:0.5rem; display:none;">パスワードが正しくありません。</p>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:1.5rem;">
+        <button id="devAuthCancelBtn" class="primary-btn" style="background:var(--surface-2); color:var(--text-muted);">キャンセル</button>
+        <button id="devAuthSubmitBtn" class="primary-btn">認証</button>
+      </div>
+    </div>
+  </div>
+
   <script type="importmap">
     {
       "imports": {
