@@ -22,7 +22,6 @@ class WaveSimulation {
       speed: 0.50,       // 伝播速度 (波動方程式のc)
       frequency: 2.0,   // 周波数 (Hz)
       viscosity: 0.986,  // 粘度 (減衰係数d)
-      wallReflection: true, // 枠を壁扱いするかどうか
     };
 
     // シミュレーション用配列
@@ -125,34 +124,7 @@ class WaveSimulation {
         let val = 2 * u_curr[idx] - u_prev[idx] + c_sq * (neighbors - 4 * u_curr[idx]);
         
         // 液体の粘度 (基本減衰) と 吸収境界条件の減衰を掛け算
-        let bd = this.params.wallReflection === false ? boundaryDamping[idx] : 1.0;
-        u_next[idx] = val * damping * bd;
-      }
-    }
-
-    // 境界の処理
-    if (this.params.wallReflection === false) {
-      for (let x = 0; x < cols; x++) {
-        u_next[x] = u_curr[cols + x];
-        u_next[(rows - 1) * cols + x] = u_curr[(rows - 2) * cols + x];
-      }
-      for (let y = 0; y < rows; y++) {
-        u_next[y * cols] = u_curr[y * cols + 1];
-        u_next[y * cols + cols - 1] = u_curr[y * cols + cols - 2];
-      }
-      // コーナーの処理
-      u_next[0] = u_curr[cols + 1];
-      u_next[cols - 1] = u_curr[2 * cols - 2];
-      u_next[(rows - 1) * cols] = u_curr[(rows - 2) * cols + 1];
-      u_next[(rows - 1) * cols + cols - 1] = u_curr[(rows - 2) * cols + cols - 2];
-    } else {
-      for (let x = 0; x < cols; x++) {
-        u_next[x] = 0;
-        u_next[(rows - 1) * cols + x] = 0;
-      }
-      for (let y = 0; y < rows; y++) {
-        u_next[y * cols] = 0;
-        u_next[y * cols + cols - 1] = 0;
+        u_next[idx] = val * damping * boundaryDamping[idx];
       }
     }
 
@@ -170,8 +142,7 @@ class WaveSimulation {
     const obstacleColor = { r: 30, g: 58, b: 95 }; // 障害物色 (#1E3A5F)
     
     // 最大変位の基準スケール (描画の色マッピング用)
-    // 小さな波でも見分けやすいよう、明度を非線形に強調する。
-    const colorScale = this.params.amplitude * 0.30;
+    const colorScale = this.params.amplitude * 0.8;
 
     for (let i = 0; i < this.gridSize; i++) {
       const px = i * 4;
@@ -188,13 +159,13 @@ class WaveSimulation {
       const val = u_curr[i];
       if (val > 0) {
         // 正の変位: シアン系 (明るい水色)
-        const intensity = Math.sqrt(Math.min(1, val / colorScale));
+        const intensity = Math.min(1, val / colorScale);
         data[px]     = Math.floor(baseColor.r + (0 - baseColor.r) * intensity);
         data[px + 1] = Math.floor(baseColor.g + (212 - baseColor.g) * intensity);
         data[px + 2] = Math.floor(baseColor.b + (255 - baseColor.b) * intensity);
       } else {
         // 負の変位: ディープブルー系 (暗い青)
-        const intensity = Math.sqrt(Math.min(1, -val / colorScale));
+        const intensity = Math.min(1, -val / colorScale);
         data[px]     = Math.floor(baseColor.r + (20 - baseColor.r) * intensity);
         data[px + 1] = Math.floor(baseColor.g + (40 - baseColor.g) * intensity);
         data[px + 2] = Math.floor(baseColor.b + (180 - baseColor.b) * intensity);
