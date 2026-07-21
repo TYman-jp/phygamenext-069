@@ -171,8 +171,8 @@
             </div>
           </div>
 
-          <button id="runBtn" class="run-button">
-            <span class="run-icon">▶</span> シミュレーション実行
+          <button id="runBtn" class="run-button run-button--reset">
+            <span class="run-icon">↺</span> リセット
           </button>
         </section>
 
@@ -262,6 +262,9 @@
               <div class="section-label">REFRACTION LOG (通常 / クイズ)</div>
             </div>
             <div class="log-controls">
+              <select id="refractionUserFilter" class="user-filter-select">
+                <option value="">全ユーザー</option>
+              </select>
               <span class="log-count mono" id="refractionLogCount">0 件</span>
               <button id="exportRefractionLog" class="export-btn">CSV</button>
             </div>
@@ -297,6 +300,9 @@
               <div class="section-label">WAVE LOG (水面波)</div>
             </div>
             <div class="log-controls">
+              <select id="waveUserFilter" class="user-filter-select">
+                <option value="">全ユーザー</option>
+              </select>
               <span class="log-count mono" id="waveLogCount">0 件</span>
               <button id="exportWaveLog" class="export-btn">CSV</button>
             </div>

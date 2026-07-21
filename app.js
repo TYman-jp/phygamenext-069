@@ -16,6 +16,10 @@
   // UI要素 (共通)
   const runBtn      = document.getElementById('runBtn');
 
+  // UI要素 (ユーザーフィルター)
+  const refractionUserFilter = document.getElementById('refractionUserFilter');
+  const waveUserFilter       = document.getElementById('waveUserFilter');
+
   // UI要素 (表示切り替え用コンテナ)
   const simulationView = document.getElementById('simulationView');
   const logView         = document.getElementById('logView');
@@ -232,6 +236,33 @@
     renderWaveLogs();
   }
 
+  // ── デバウンスユーティリティ ──
+  function debounce(fn, ms) {
+    let timer = null;
+    return function(...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), ms);
+    };
+  }
+
+  // ── デバウンスされたログ記録 (屈折) ──
+  const logRefractionDebounced = debounce(async () => {
+    const params = getParams();
+    const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
+    await logger.add(params, { theta2, isTIR }, currentUserName);
+    renderRefractionLogs();
+  }, 1000);
+
+  // ── デバウンスされたログ記録 (水面波) ──
+  const logWaveDebounced = debounce(async () => {
+    const params = getWaveParams();
+    await logger.add(params, {
+      type: 'wave',
+      hasObstacles: waveSim.hasObstacles()
+    }, currentUserName);
+    renderWaveLogs();
+  }, 1000);
+
   // ── スライダーイベント (屈折) ──
   angleSlider.addEventListener('input', () => {
     const v = parseFloat(angleSlider.value);
@@ -239,18 +270,21 @@
     incidentDisplay.textContent = v.toFixed(1);
     updateFormulaPreview();
     previewDraw();
+    logRefractionDebounced();
   });
 
   n1Slider.addEventListener('input', () => {
     n1Val.textContent = parseFloat(n1Slider.value).toFixed(2);
     updateFormulaPreview();
     previewDraw();
+    logRefractionDebounced();
   });
 
   n2Slider.addEventListener('input', () => {
     n2Val.textContent = parseFloat(n2Slider.value).toFixed(2);
     updateFormulaPreview();
     previewDraw();
+    logRefractionDebounced();
   });
 
   /** スライダー変更時にリアルタイムプレビュー（アニメなし） */
@@ -303,6 +337,8 @@
       n2Slider.value = n2;
       angleSlider.value = angle;
       syncParamLabels();
+      // プリセット適用時も即ログ記録
+      logRefractionDebounced();
     });
   });
 
@@ -335,34 +371,40 @@
   waveAmpSlider.addEventListener('input', () => {
     waveAmpVal.textContent = parseFloat(waveAmpSlider.value).toFixed(1);
     updateWaveParams();
+    logWaveDebounced();
   });
 
   waveSpeedSlider.addEventListener('input', () => {
     waveSpeedVal.textContent = parseFloat(waveSpeedSlider.value).toFixed(2);
     updateWaveParams();
+    logWaveDebounced();
   });
 
   waveFreqSlider.addEventListener('input', () => {
     waveFreqVal.textContent = `${parseFloat(waveFreqSlider.value).toFixed(1)}Hz`;
     updateWaveParams();
+    logWaveDebounced();
   });
 
   waveViscSlider.addEventListener('input', () => {
     const v = parseFloat(waveViscSlider.value);
     waveViscVal.textContent = getViscosityLabel(v);
     updateWaveParams();
+    logWaveDebounced();
   });
 
   if (waveContrastSlider) {
     waveContrastSlider.addEventListener('input', () => {
       waveContrastVal.textContent = parseFloat(waveContrastSlider.value).toFixed(1);
       updateWaveParams();
+      logWaveDebounced();
     });
   }
 
   if (wallReflectionCheck) {
     wallReflectionCheck.addEventListener('change', () => {
       updateWaveParams();
+      logWaveDebounced();
     });
   }
 
@@ -451,52 +493,68 @@
     }
   }
 
-  // ── 実行ボタン ──
+  // ── デフォルトパラメータ ──
+  const DEFAULT_REFRACTION = { angle: 45, n1: 1.00, n2: 1.50 };
+  const DEFAULT_WAVE = { amp: 5.0, speed: 0.50, freq: 2.0, visc: 0.998, contrast: 1.5, wallReflection: true };
+
+  // ── リセットボタン ──
   runBtn.addEventListener('click', async () => {
     if (currentMode === 'refraction') {
+      // 屈折パラメータをデフォルトに戻す
+      angleSlider.value = DEFAULT_REFRACTION.angle;
+      n1Slider.value    = DEFAULT_REFRACTION.n1;
+      n2Slider.value    = DEFAULT_REFRACTION.n2;
+      syncParamLabels();
+
+      // リセットログ記録
       const params = getParams();
       const { theta2, isTIR } = sim.compute(params.theta1, params.n1, params.n2);
-
-      // アニメーション実行
-      sim.run(params);
-
-      // バッジ・警告更新
-      updateBadges(isTIR, theta2);
-      tirWarning.classList.toggle('hidden', !isTIR);
-      updateFormulaPreview();
-
-      // ログ記録 (屈折系ログへ)
-      await logger.add(params, { theta2, isTIR }, currentUserName);
+      await logger.add(params, { theta2, isTIR, type: 'reset' }, currentUserName);
       renderRefractionLogs();
-    } else if (currentMode === 'wave') {
-      // 水面波モード
-      const params = getWaveParams();
 
-      // シミュレーションの状態を一度クリアして再スタートさせる
+    } else if (currentMode === 'wave') {
+      // 水面波パラメータをデフォルトに戻す
+      waveAmpSlider.value      = DEFAULT_WAVE.amp;
+      waveSpeedSlider.value    = DEFAULT_WAVE.speed;
+      waveFreqSlider.value     = DEFAULT_WAVE.freq;
+      waveViscSlider.value     = DEFAULT_WAVE.visc;
+      if (waveContrastSlider) waveContrastSlider.value = DEFAULT_WAVE.contrast;
+      if (wallReflectionCheck) wallReflectionCheck.checked = DEFAULT_WAVE.wallReflection;
+
+      // 表示ラベルを更新
+      waveAmpVal.textContent   = DEFAULT_WAVE.amp.toFixed(1);
+      waveSpeedVal.textContent = DEFAULT_WAVE.speed.toFixed(2);
+      waveFreqVal.textContent  = `${DEFAULT_WAVE.freq.toFixed(1)}Hz`;
+      waveViscVal.textContent  = getViscosityLabel(DEFAULT_WAVE.visc);
+      if (waveContrastVal) waveContrastVal.textContent = DEFAULT_WAVE.contrast.toFixed(1);
+
+      // シミュレーションに反映
+      const params = getWaveParams();
+      waveSim.setParams(params);
       waveSim.clear();
 
-      // ログ記録 (タイプ: 'wave', 障害物の有無を含める)
-      await logger.add(params, {
-        type: 'wave',
-        hasObstacles: waveSim.hasObstacles()
-      }, currentUserName);
+      // リセットログ記録
+      await logger.add(params, { type: 'wave-reset', hasObstacles: false }, currentUserName);
       renderWaveLogs();
     }
 
     // ボタンフラッシュ
-    runBtn.style.background = '#33DDFF';
-    setTimeout(() => { runBtn.style.background = ''; }, 200);
+    runBtn.style.opacity = '0.5';
+    setTimeout(() => { runBtn.style.opacity = ''; }, 200);
   });
 
   /** ログ1件分のテーブル行を生成 (タイプに応じて表記を切り替え) */
   function buildLogRow(entry) {
     const tr = document.createElement('tr');
 
-    const isQuiz = entry.type === 'quiz' || entry.type === 'wave-quiz';
-    const isWave = entry.type === 'wave' || entry.type === 'wave-quiz';
+    const isQuiz  = entry.type === 'quiz' || entry.type === 'wave-quiz';
+    const isWave  = entry.type === 'wave' || entry.type === 'wave-quiz' || entry.type === 'wave-reset';
+    const isReset = entry.type === 'reset' || entry.type === 'wave-reset';
 
     let typeHtml = `<span class="log-type-normal">通常</span>`;
-    if (isQuiz) {
+    if (isReset) {
+      typeHtml = `<span class="log-type-reset">リセット</span>`;
+    } else if (isQuiz) {
       typeHtml = `<span class="log-type-quiz">クイズ</span>`;
     }
 
@@ -547,34 +605,70 @@
     return tr;
   }
 
+  /** ユーザーフィルタードロップダウンを最新のユーザー一覧で更新 */
+  function updateUserFilters() {
+    const updateSelect = (selectEl, category) => {
+      if (!selectEl) return;
+      const currentVal = selectEl.value;
+      const users = logger.getUserList(category);
+      selectEl.innerHTML = '<option value="">全ユーザー</option>';
+      users.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        selectEl.appendChild(opt);
+      });
+      // 以前の選択を維持できるなら維持
+      if (users.includes(currentVal)) selectEl.value = currentVal;
+    };
+    updateSelect(refractionUserFilter, 'refraction');
+    updateSelect(waveUserFilter, 'wave');
+  }
+
   /** 屈折系ログ (通常 + クイズ) をテーブルへ再描画 */
   function renderRefractionLogs() {
-    const logs = logger.refractionLogs;
+    const filterUser = refractionUserFilter ? refractionUserFilter.value : '';
+    const allLogs = logger.refractionLogs;
+    const logs = filterUser ? allLogs.filter(e => e.userName === filterUser) : allLogs;
     refractionLogBody.innerHTML = '';
     if (logs.length === 0) {
-      refractionLogBody.innerHTML = `<tr class="log-empty"><td colspan="8">まだログがありません。光の屈折シミュレーションを実行してください。</td></tr>`;
+      refractionLogBody.innerHTML = `<tr class="log-empty"><td colspan="9">まだログがありません。パラメータを変更するとログが記録されます。</td></tr>`;
     } else {
       // 最新50件を表示
       logs.slice(0, 50).forEach(entry => {
         refractionLogBody.appendChild(buildLogRow(entry));
       });
     }
-    refractionLogCount.textContent = `${logs.length} 件`;
+    const suffix = filterUser ? ` (${filterUser})` : '';
+    refractionLogCount.textContent = `${logs.length} 件${suffix}`;
+    updateUserFilters();
   }
 
   /** 水面波ログをテーブルへ再描画 */
   function renderWaveLogs() {
-    const logs = logger.waveLogs;
+    const filterUser = waveUserFilter ? waveUserFilter.value : '';
+    const allLogs = logger.waveLogs;
+    const logs = filterUser ? allLogs.filter(e => e.userName === filterUser) : allLogs;
     waveLogBody.innerHTML = '';
     if (logs.length === 0) {
-      waveLogBody.innerHTML = `<tr class="log-empty"><td colspan="8">まだログがありません。水面波シミュレーションを実行してください。</td></tr>`;
+      waveLogBody.innerHTML = `<tr class="log-empty"><td colspan="9">まだログがありません。パラメータを変更するとログが記録されます。</td></tr>`;
     } else {
       // 最新50件を表示
       logs.slice(0, 50).forEach(entry => {
         waveLogBody.appendChild(buildLogRow(entry));
       });
     }
-    waveLogCount.textContent = `${logs.length} 件`;
+    const suffix = filterUser ? ` (${filterUser})` : '';
+    waveLogCount.textContent = `${logs.length} 件${suffix}`;
+    updateUserFilters();
+  }
+
+  // ── ユーザーフィルター変更イベント ──
+  if (refractionUserFilter) {
+    refractionUserFilter.addEventListener('change', () => renderRefractionLogs());
+  }
+  if (waveUserFilter) {
+    waveUserFilter.addEventListener('change', () => renderWaveLogs());
   }
 
   // ── 屈折系ログ: CSV エクスポート ──

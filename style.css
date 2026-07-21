@@ -287,6 +287,39 @@ body.mode-wave .canvas-overlay {
 .run-button:active { transform: translateY(0); }
 .run-icon { font-size: 0.9rem; }
 
+/* リセットボタン */
+.run-button--reset {
+  background: linear-gradient(135deg, #2D3748, #1A2744);
+  color: var(--accent);
+  border: 1.5px solid rgba(0,212,255,0.45);
+  box-shadow: 0 0 16px rgba(0,212,255,0.12);
+}
+.run-button--reset:hover {
+  background: linear-gradient(135deg, #374151, #1E3A5F);
+  box-shadow: 0 0 24px rgba(0,212,255,0.35);
+  border-color: var(--accent);
+  color: #33DDFF;
+}
+.run-button--reset:active { transform: translateY(0); }
+
+/* ユーザーフィルター */
+.user-filter-select {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.user-filter-select:hover, .user-filter-select:focus {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ── TIR Warning ── */
 .tir-warning {
   background: rgba(255,184,0,0.1);
@@ -517,8 +550,9 @@ body.mode-wave .canvas-overlay {
 
 .result-ok { color: var(--ray-in); }
 .result-tir { color: var(--warning); }
-.log-type-quiz { color: var(--ray-ref); font-weight: 500; }
+.log-type-quiz  { color: var(--ray-ref); font-weight: 500; }
 .log-type-normal { color: var(--text-muted); }
+.log-type-reset  { color: #A78BFA; font-weight: 500; }
 .result-correct { color: #36E58A; }
 .result-miss { color: var(--warning); }
 

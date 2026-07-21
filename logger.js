@@ -214,6 +214,13 @@ class SimulationLogger {
     const p = n => String(n).padStart(2,'0');
     return `${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   }
+
+  /** 保存されているログから重複のないユーザー名一覧を返す */
+  getUserList(category) {
+    const src = category === 'wave' ? this.waveLogs : this.refractionLogs;
+    const names = [...new Set(src.map(e => e.userName || '').filter(n => n !== ''))];
+    return names.sort();
+  }
 }
 
 // 他のスクリプト（app.jsなど）から参照できるようにグローバルへ公開
